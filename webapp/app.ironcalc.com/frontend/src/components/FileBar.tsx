@@ -4,7 +4,7 @@ import {
   type Model,
   Tooltip,
 } from "@ironcalc/workbook";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { PanelLeftClose, PanelLeftOpen, Sparkles } from "lucide-react";
 import { type RefObject, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MIN_MAIN_CONTENT_WIDTH_FOR_MOBILE } from "../App";
@@ -41,6 +41,8 @@ export function FileBar(properties: {
   onLanguageChange: (language: string) => void;
   themeMode: ThemeMode;
   onThemeModeChange: (mode: ThemeMode) => void;
+  isAISidebarOpen: boolean;
+  onToggleAISidebar: () => void;
 }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
@@ -60,6 +62,9 @@ export function FileBar(properties: {
     properties.isDrawerOpen
       ? "file_bar.close_sidebar"
       : "file_bar.open_sidebar",
+  );
+  const aiSidebarLabel = t(
+    properties.isAISidebarOpen ? "ai_sidebar.close" : "ai_sidebar.open",
   );
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: We need to update the maxTitleWidth when the width changes
@@ -175,6 +180,14 @@ export function FileBar(properties: {
       <div ref={spacerRef} className="app-ic-file-bar-spacer" />
       <div className="app-ic-file-bar-right">
         <StorageWarning />
+        <Tooltip title={aiSidebarLabel}>
+          <IconButton
+            icon={<Sparkles />}
+            aria-label={aiSidebarLabel}
+            size="md"
+            onClick={properties.onToggleAISidebar}
+          />
+        </Tooltip>
         <div className="app-ic-file-bar-dialog-container">
           <ShareButton
             onClick={() => setIsDialogOpen(true)}

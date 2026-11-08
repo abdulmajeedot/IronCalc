@@ -1,0 +1,68 @@
+.app-ic-workbook-tabs {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  height: 32px;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--palette-grey-100);
+  border-bottom: 1px solid var(--palette-grey-300);
+  font-family: var(--typography-font-family);
+  font-size: calc(var(--typography-font-size) - 1px);
+  color: var(--palette-grey-600);
+}
+
+.app-ic-workbook-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  max-width: 220px;
+  border-radius: 6px 6px 0 0;
+}
+
+.app-ic-workbook-tab--active {
+  background: var(--palette-common-white);
+  color: var(--palette-grey-900);
+}
+
+.app-ic-workbook-tab-name,
+.app-ic-workbook-tab-close {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.app-ic-workbook-tab-name {
+  gap: 6px;
+  min-width: 0;
+  padding: 0 4px 0 10px;
+}
+
+.app-ic-workbook-tab-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-ic-workbook-tab-name svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--palette-success-main, #2e7d32);
+}
+
+.app-ic-workbook-tab-close {
+  flex: none;
+  padding: 0 8px 0 4px;
+}
+
+.app-ic-workbook-tab-close svg {
+  width: 12px;
+  height: 12px;
+}

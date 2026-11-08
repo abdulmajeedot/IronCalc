@@ -1,0 +1,18 @@
+# Local pnpm workspace for the three web packages. Upstream installs each one
+# separately with npm; this file lets pnpm link them together so a rebuilt wasm
+# package or widget is picked up without reinstalling.
+packages:
+  - IronCalc
+  - app.ironcalc.com/frontend
+  - embed.ironcalc.com
+
+overrides:
+  "@ironcalc/wasm": link:../bindings/wasm/pkg
+  "@ironcalc/workbook": workspace:*
+
+# Same choice as "allowScripts" in webapp/IronCalc/package.json. The first two
+# come with the agent library and are only used by providers we don't enable.
+allowBuilds:
+  '@google/genai': false
+  protobufjs: false
+  esbuild: false

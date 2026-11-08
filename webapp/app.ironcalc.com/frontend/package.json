@@ -13,13 +13,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "1.5.0",
+    "@earendil-works/pi-ai": "1.5.0",
     "@ironcalc/workbook": "file:../../IronCalc/",
     "i18next": "^26.4.2",
     "lucide-react": "^1.49.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "react-i18next": "^17.0.15"
+    "react-i18next": "^17.0.15",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -1,0 +1,434 @@
+.app-ic-ai-sidebar {
+  flex: 0 0 360px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--palette-common-white);
+  border-left: 1px solid var(--palette-grey-300);
+  font-family: var(--typography-font-family);
+  font-size: var(--typography-font-size);
+  color: var(--palette-grey-900);
+}
+
+.app-ic-ai-sidebar[hidden] {
+  display: none;
+}
+
+.app-ic-ai-sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--palette-grey-300);
+}
+
+.app-ic-ai-sidebar-title {
+  font-weight: 600;
+}
+
+.app-ic-ai-sidebar-header-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.app-ic-ai-sidebar-chat {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.app-ic-ai-sidebar-chat[hidden] {
+  display: none;
+}
+
+.app-ic-ai-sidebar-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.app-ic-ai-sidebar-panel-title {
+  font-weight: 600;
+}
+
+.app-ic-ai-sidebar-memory {
+  flex: 1;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 160px;
+  padding: 8px;
+  resize: none;
+  border: 1px solid var(--palette-grey-300);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 140%;
+}
+
+.app-ic-ai-sidebar-version {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--palette-grey-300);
+}
+
+.app-ic-ai-sidebar-version > button {
+  flex: none;
+}
+
+.app-ic-ai-sidebar-version-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.app-ic-ai-sidebar-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--palette-grey-300);
+  border-radius: 8px;
+}
+
+.app-ic-ai-sidebar-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 140%;
+}
+
+.app-ic-ai-sidebar-plan-step svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  margin-top: 3px;
+  color: var(--palette-grey-600);
+}
+
+.app-ic-ai-sidebar-plan-step--done span {
+  color: var(--palette-grey-600);
+  text-decoration: line-through;
+}
+
+.app-ic-ai-sidebar-source {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--palette-grey-300);
+  border-radius: 6px;
+  background: var(--palette-grey-100);
+  color: inherit;
+  font: inherit;
+  font-size: calc(var(--typography-font-size) - 1px);
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-ic-ai-sidebar-source svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: var(--palette-primary-main);
+}
+
+.app-ic-ai-sidebar-source span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-ic-ai-sidebar-suggestions {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--palette-common-white);
+  border: 1px solid var(--palette-grey-300);
+  border-radius: 6px;
+  box-shadow: var(--shadow-sm);
+}
+
+.app-ic-ai-sidebar-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-ic-ai-sidebar-suggestion--active {
+  background: var(--palette-grey-100);
+}
+
+.app-ic-ai-sidebar-suggestion svg {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  color: var(--palette-success-main, #2e7d32);
+}
+
+.app-ic-ai-sidebar-suggestion span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-ic-ai-sidebar-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+
+.app-ic-ai-sidebar-entry {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 140%;
+}
+
+.app-ic-ai-sidebar-entry--user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--palette-grey-100);
+}
+
+.app-ic-ai-sidebar-entry--tool,
+.app-ic-ai-sidebar-entry--notice {
+  font-size: calc(var(--typography-font-size) - 1px);
+  color: var(--palette-grey-600);
+}
+
+.app-ic-ai-sidebar-entry--error {
+  font-size: calc(var(--typography-font-size) - 1px);
+  color: var(--palette-error-main);
+}
+
+.app-ic-ai-sidebar-entry--assistant {
+  white-space: normal;
+}
+
+.app-ic-ai-sidebar-markdown > :first-child {
+  margin-top: 0;
+}
+
+.app-ic-ai-sidebar-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.app-ic-ai-sidebar-markdown p,
+.app-ic-ai-sidebar-markdown ul,
+.app-ic-ai-sidebar-markdown ol,
+.app-ic-ai-sidebar-markdown pre,
+.app-ic-ai-sidebar-markdown table,
+.app-ic-ai-sidebar-markdown blockquote {
+  margin: 0 0 8px;
+}
+
+.app-ic-ai-sidebar-markdown h1,
+.app-ic-ai-sidebar-markdown h2,
+.app-ic-ai-sidebar-markdown h3,
+.app-ic-ai-sidebar-markdown h4,
+.app-ic-ai-sidebar-markdown h5,
+.app-ic-ai-sidebar-markdown h6 {
+  margin: 12px 0 4px;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.app-ic-ai-sidebar-markdown h1,
+.app-ic-ai-sidebar-markdown h2 {
+  font-size: calc(var(--typography-font-size) + 2px);
+}
+
+.app-ic-ai-sidebar-markdown ul,
+.app-ic-ai-sidebar-markdown ol {
+  padding-left: 20px;
+}
+
+.app-ic-ai-sidebar-markdown li {
+  margin-bottom: 2px;
+}
+
+.app-ic-ai-sidebar-markdown a {
+  color: var(--palette-primary-main);
+}
+
+.app-ic-ai-sidebar-markdown blockquote {
+  padding-left: 8px;
+  border-left: 2px solid var(--palette-grey-300);
+  color: var(--palette-grey-600);
+}
+
+.app-ic-ai-sidebar-markdown code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: var(--palette-grey-100);
+  font-family: monospace;
+  font-size: 0.92em;
+}
+
+.app-ic-ai-sidebar-markdown pre {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--palette-grey-100);
+  overflow-x: auto;
+}
+
+.app-ic-ai-sidebar-markdown pre code {
+  padding: 0;
+  background: none;
+}
+
+/* Wide tables scroll inside the panel instead of stretching it. */
+.app-ic-ai-sidebar-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.app-ic-ai-sidebar-markdown th,
+.app-ic-ai-sidebar-markdown td {
+  padding: 3px 6px;
+  border: 1px solid var(--palette-grey-300);
+  text-align: left;
+  overflow-wrap: normal;
+}
+
+.app-ic-ai-sidebar-markdown th {
+  font-weight: 600;
+  background: var(--palette-grey-100);
+}
+
+.app-ic-ai-sidebar-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid var(--palette-grey-300);
+}
+
+.app-ic-ai-sidebar-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--palette-grey-600);
+  font-size: calc(var(--typography-font-size) - 1px);
+}
+
+.app-ic-ai-sidebar-context > svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--palette-success-main, #2e7d32);
+}
+
+.app-ic-ai-sidebar-context > button {
+  flex: none;
+}
+
+.app-ic-ai-sidebar-context-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-ic-ai-sidebar-reference {
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--palette-primary-main) 24%, transparent);
+  color: inherit;
+}
+
+.app-ic-ai-sidebar-editor {
+  position: relative;
+}
+
+/* The mirror sits behind the textarea and draws the highlights, so both must
+   lay out text identically. */
+.app-ic-ai-sidebar-prompt,
+.app-ic-ai-sidebar-prompt-mirror {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--palette-grey-300);
+  border-radius: 6px;
+  font: inherit;
+  line-height: 140%;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.app-ic-ai-sidebar-prompt {
+  position: relative;
+  display: block;
+  resize: none;
+  background: transparent;
+  color: inherit;
+  scrollbar-width: none;
+}
+
+.app-ic-ai-sidebar-prompt-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-color: transparent;
+  color: transparent;
+  pointer-events: none;
+}
+
+.app-ic-ai-sidebar-actions {
+  display: flex;
+  justify-content: space-between;
+}
+
+.app-ic-ai-sidebar-hint {
+  font-size: calc(var(--typography-font-size) - 2px);
+  color: var(--palette-grey-600);
+}
+
+.app-ic-ai-sidebar-key-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+}
+
+@media (max-width: 768px) {
+  .app-ic-ai-sidebar {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    border-left: none;
+  }
+}

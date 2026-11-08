@@ -453,7 +453,7 @@ async function insertWorkbook(
   model: Model,
   name: string,
   select: boolean,
-): Promise<void> {
+): Promise<string> {
   const uuid = randomUUID();
   const metadata: WorkbookMetadata = {
     name,
@@ -469,6 +469,7 @@ async function insertWorkbook(
   if (select) {
     setSelectedUuid(uuid);
   }
+  return uuid;
 }
 
 function newestUuid(metadata: ModelsMetadata): string | null {
@@ -522,7 +523,29 @@ export function createNewModel(): Promise<Model> {
 // Stores an existing model (e.g. an uploaded file) as a new workbook and
 // selects it.
 export function saveModelToStorage(model: Model): Promise<void> {
-  return serialized(() => insertWorkbook(model, model.getName(), true));
+  return serialized(async () => {
+    await insertWorkbook(model, model.getName(), true);
+  });
+}
+
+// Creates an empty workbook without opening it and returns its uuid.
+export function createWorkbookInStorage(name: string): Promise<string> {
+  return serialized(() =>
+    insertWorkbook(createModelWithSafeTimezone(name), name, false),
+  );
+}
+
+// Persists the bytes of a workbook that may not be the open one.
+export function saveModelBytesInStorage(
+  uuid: string,
+  model: Model,
+): Promise<void> {
+  return serialized(async () => {
+    const bytes = model.toBytes();
+    await writeTransaction((_workbooks, bytesStore) => {
+      bytesStore.put(bytes, uuid);
+    });
+  });
 }
 
 // Loads the currently selected workbook. Returns null if there is none or it

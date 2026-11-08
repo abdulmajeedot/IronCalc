@@ -11,6 +11,8 @@ import {
 import "@ironcalc/workbook/style.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AISidebar } from "./components/AISidebar/AISidebar";
+import { WorkbookTabs } from "./components/AISidebar/WorkbookTabs";
 import { FileBar } from "./components/FileBar";
 import LeftDrawer from "./components/LeftDrawer/LeftDrawer";
 import { NoticeBar } from "./components/NoticeBar";
@@ -26,6 +28,7 @@ import {
   deleteModelByUuid,
   deleteSelectedModel,
   getLanguageFromLocale,
+  getSelectedUuid,
   getShortLocaleCode,
   initStorage,
   isStorageEmpty,
@@ -40,6 +43,7 @@ import {
   subscribeToStorage,
   type ThemeMode,
 } from "./components/storage";
+import { useWindowWidth } from "./components/useWindowWidth";
 import TemplatesDialog from "./components/WelcomeDialog/TemplatesDialog";
 import WelcomeDialog from "./components/WelcomeDialog/WelcomeDialog";
 
@@ -48,6 +52,8 @@ function App() {
   const [showWelcomeDialog, setShowWelcomeDialog] = useState(false);
   const [isTemplatesDialogOpen, setTemplatesDialogOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isAISidebarOpen, setIsAISidebarOpen] = useState(false);
+  const windowWidth = useWindowWidth();
   const [themeMode, setThemeMode] = useState<ThemeMode>(
     loadThemeModeFromStorage,
   );
@@ -211,6 +217,29 @@ function App() {
     window.history.replaceState(null, "", window.location.pathname);
   };
 
+  // Saves first: the autosave may not have run since the last change.
+  const handleOpenWorkbook = async (
+    uuid: string,
+    apply: (target: Model) => void,
+  ) => {
+    if (uuid === getSelectedUuid()) {
+      apply(model);
+      ironCalcRef.current?.workbook?.refresh();
+      return;
+    }
+    await saveSelectedModelInStorage(model).catch(reportSaveError);
+    const target = await selectModelFromStorage(uuid);
+    if (target) {
+      apply(target);
+      showLocalModel(target);
+    }
+  };
+
+  const handleSelectTab = async (uuid: string) => {
+    await saveSelectedModelInStorage(model).catch(reportSaveError);
+    await handleSetModel(uuid);
+  };
+
   // Handlers for model changes that also update our models state
   const handleNewModel = async () => {
     showLocalModel(await createNewModel());
@@ -247,6 +276,12 @@ function App() {
     }
   };
 
+  // On narrow screens the assistant covers the sheet instead of sitting beside it.
+  const aiSidebarWidth =
+    isAISidebarOpen && windowWidth >= MIN_MAIN_CONTENT_WIDTH_FOR_MOBILE
+      ? AI_SIDEBAR_WIDTH
+      : 0;
+
   // We could use context for model, but the problem is that it should initialized to null.
   // Passing the property down makes sure it is always defined.
 
@@ -262,7 +297,7 @@ function App() {
         className={`app-ic-main-content${isDrawerOpen ? " app-ic-main-content--open" : ""}`}
         style={{
           marginLeft: isDrawerOpen ? 0 : -DRAWER_WIDTH,
-          width: isDrawerOpen ? `calc(100% - ${DRAWER_WIDTH}px)` : "100%",
+          width: `calc(100% - ${(isDrawerOpen ? DRAWER_WIDTH : 0) + aiSidebarWidth}px)`,
         }}
       >
         <FileBar
@@ -290,6 +325,8 @@ function App() {
           onLanguageChange={handleLanguageChange}
           themeMode={themeMode}
           onThemeModeChange={handleThemeModeChange}
+          isAISidebarOpen={isAISidebarOpen}
+          onToggleAISidebar={() => setIsAISidebarOpen(!isAISidebarOpen)}
         />
         {isReadOnly && (
           <NoticeBar
@@ -298,6 +335,7 @@ function App() {
             onAction={handleSaveCopy}
           />
         )}
+        <WorkbookTabs onSelect={handleSelectTab} />
         <IronCalc
           model={model}
           ref={ironCalcRef}
@@ -312,6 +350,22 @@ function App() {
           />
         )}
       </div>
+      <AISidebar
+        open={isAISidebarOpen}
+        model={model}
+        isReadOnly={isReadOnly}
+        ironCalcRef={ironCalcRef}
+        onClose={() => setIsAISidebarOpen(false)}
+        onOpenWorkbook={handleOpenWorkbook}
+        onOpenCopy={async (copy) => {
+          try {
+            await saveModelToStorage(copy);
+            showLocalModel(copy);
+          } catch (e) {
+            reportSaveError(e);
+          }
+        }}
+      />
       {showWelcomeDialog && (
         <WelcomeDialog
           onClose={async () => {
@@ -377,6 +431,7 @@ function App() {
 }
 
 const DRAWER_WIDTH = 264;
+const AI_SIDEBAR_WIDTH = 360;
 export const MIN_MAIN_CONTENT_WIDTH_FOR_MOBILE = 768;
 
 export default App;
