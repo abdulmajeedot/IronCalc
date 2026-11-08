@@ -43,6 +43,7 @@ import {
   SwatchBook,
   TableCellsMerge,
   TableCellsSplit,
+  TableProperties,
   Type,
   Underline,
   Undo2,
@@ -122,6 +123,8 @@ type ToolbarProperties = {
   formatOptions: FmtSettings;
   onOpenConditionalFormatting: () => void;
   isConditionalFormattingOpen: boolean;
+  onOpenPivotTable: () => void;
+  isPivotTableOpen: boolean;
   onOpenNamedStyles: () => void;
   isNamedStylesOpen: boolean;
   onOpenLinkDialog: () => void;
@@ -498,6 +501,15 @@ function Toolbar(properties: ToolbarProperties) {
               aria-label={t("toolbar.conditional_formatting")}
               pressed={properties.isConditionalFormattingOpen}
               onClick={properties.onOpenConditionalFormatting}
+              disabled={!canEdit}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.pivot_table")}>
+            <IconButton
+              icon={<TableProperties />}
+              aria-label={t("toolbar.pivot_table")}
+              pressed={properties.isPivotTableOpen}
+              onClick={properties.onOpenPivotTable}
               disabled={!canEdit}
             />
           </Tooltip>

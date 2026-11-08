@@ -102,6 +102,31 @@ const Workbook = (
     setDrawerOpen(true);
   }, []);
 
+  // The field panel follows the selection: it opens on entering a PivotTable
+  // and closes on leaving one, unless the user opened it with the toolbar.
+  const pivotPanelFollowsSelection = useRef(false);
+  // Set when the user hides the field list from a pivot's right-click menu
+  const pivotFieldListHidden = useRef(false);
+  const selectedForPivot = model.getSelectedView();
+  const pivotAtSelection = canEdit
+    ? (model.getPivotTableAt(
+        selectedForPivot.sheet,
+        selectedForPivot.row,
+        selectedForPivot.column,
+      ) ?? null)
+    : null;
+  useEffect(() => {
+    if (pivotAtSelection !== null) {
+      pivotPanelFollowsSelection.current = true;
+      if (!pivotFieldListHidden.current) {
+        openDrawer("pivotTable");
+      }
+    } else if (pivotPanelFollowsSelection.current) {
+      pivotPanelFollowsSelection.current = false;
+      setDrawerOpen(false);
+    }
+  }, [pivotAtSelection, openDrawer]);
+
   const worksheets = model.getWorksheetsProperties();
   const info = worksheets.map(
     ({ name, color, sheet_id, state }: WorksheetProperties) => {
@@ -1107,6 +1132,12 @@ const Workbook = (
           isConditionalFormattingOpen={
             isDrawerOpen && drawerType === "conditionalFormatting"
           }
+          onOpenPivotTable={() => {
+            pivotPanelFollowsSelection.current = false;
+            pivotFieldListHidden.current = false;
+            openDrawer("pivotTable");
+          }}
+          isPivotTableOpen={isDrawerOpen && drawerType === "pivotTable"}
           onOpenNamedStyles={actions.openNamedStyles}
           isNamedStylesOpen={isDrawerOpen && drawerType === "namedStyles"}
           onOpenLinkDialog={actions.openLinkDialog}
@@ -1146,6 +1177,25 @@ const Workbook = (
           ref={worksheetRef}
           canEdit={canEdit && canEditFormula}
           actions={actions}
+          pivotFieldListOpen={isDrawerOpen && drawerType === "pivotTable"}
+          onTogglePivotFieldList={() => {
+            if (isDrawerOpen && drawerType === "pivotTable") {
+              pivotFieldListHidden.current = true;
+              setDrawerOpen(false);
+            } else {
+              pivotFieldListHidden.current = false;
+              openDrawer("pivotTable");
+            }
+          }}
+          onShowPivotSettings={() => {
+            pivotFieldListHidden.current = false;
+            openDrawer("pivotTable");
+            setTimeout(() => {
+              document
+                .querySelector(".ic-pivot-settings")
+                ?.scrollIntoView({ block: "nearest" });
+            }, 0);
+          }}
           onEditLink={
             canEdit
               ? (row: number, column: number): void => {

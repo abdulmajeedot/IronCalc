@@ -1,5 +1,6 @@
 mod conditional_formatting;
 mod metadata;
+mod pivot;
 pub(crate) mod shared_strings;
 mod sheet_data;
 mod styles;
@@ -123,6 +124,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     for dn in &mut workbook.defined_names {
         dn.formula = reparse_formula_hack(&dn.formula, &worksheet_names)?;
     }
+    let pivot_tables = pivot::load_pivots(&mut archive, &rels, &worksheets, &tables);
     let metadata = match load_metadata(&mut archive) {
         Ok(metadata) => metadata,
         Err(_) => {
@@ -137,7 +139,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
             }
         }
     };
-    Ok(Workbook {
+    let mut workbook = Workbook {
         shared_strings: shared_strings.into_strings(),
         defined_names: workbook.defined_names,
         worksheets,
@@ -150,7 +152,10 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         metadata,
         tables,
         theme,
-    })
+        pivot_tables,
+    };
+    pivot::paint_imported_pivots(&mut workbook);
+    Ok(workbook)
 }
 
 // Imports a file from disk into an internal representation
@@ -194,7 +199,7 @@ pub fn load_from_xlsx<'a>(
 pub fn load_from_icalc<'a>(file_name: &str, language_id: &'a str) -> Result<Model<'a>, XlsxError> {
     let contents = fs::read(file_name)
         .map_err(|e| XlsxError::IO(format!("Could not extract workbook name: {e}")))?;
-    let workbook: Workbook = bitcode::decode(&contents)
+    let workbook = ironcalc_base::pivot::workbook_from_bytes(&contents)
         .map_err(|e| XlsxError::IO(format!("Failed to decode file: {e}")))?;
     Model::from_workbook(workbook, language_id).map_err(XlsxError::Workbook)
 }

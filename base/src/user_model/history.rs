@@ -4,9 +4,11 @@ use bitcode::{Decode, Encode};
 
 use crate::{
     cf_types::CfRule,
+    pivot::PivotTable,
     types::{
         Cell, Col, Color, Link, MergedCell, Row, SheetState, Style, StyleIncludes, Theme, Worksheet,
     },
+    user_model::pivot::PivotCellDiff,
 };
 
 #[derive(Clone, Encode, Decode)]
@@ -322,6 +324,15 @@ pub(crate) enum Diff {
         sheet: u32,
         old_value: Vec<MergedCell>,
         new_value: Vec<MergedCell>,
+    },
+    /// Installs the list of pivots and the cells a pivot edit changed. Row and
+    /// column deletions push it with equal lists so undo restores pivot
+    /// positions exactly, like [`Diff::SetMergedCells`].
+    SetPivotTables {
+        sheet: u32,
+        old_pivots: Vec<PivotTable>,
+        new_pivots: Vec<PivotTable>,
+        cells: Vec<PivotCellDiff>,
     },
 }
 

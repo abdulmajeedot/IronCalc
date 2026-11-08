@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import ConditionalFormatting from "./ConditionalFormatting/ConditionalFormatting";
 import NamedRanges from "./NamedRanges/NamedRanges";
 import NamedStylesPanel from "./NamedStyles/NamedStylesPanel";
+import PivotTablePanel from "./PivotTable/PivotTablePanel";
 import RegionalSettings from "./RegionalSettings/RegionalSettings";
 import Themes from "./Themes/themes";
 import "./rightdrawer.css";
@@ -30,6 +31,7 @@ export type DrawerType =
   | "namedStyles"
   | "regionalSettings"
   | "conditionalFormatting"
+  | "pivotTable"
   | "themes";
 
 interface RightDrawerProps {
@@ -205,6 +207,15 @@ const RightDrawer = ({
             onUpdate={onUpdate}
             model={model}
             currentTheme={currentTheme}
+          />
+        );
+      case "pivotTable":
+        return (
+          <PivotTablePanel
+            onClose={onClose}
+            model={model}
+            onUpdate={onUpdate}
+            getSelectedArea={getSelectedArea}
           />
         );
       case "themes":

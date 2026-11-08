@@ -1,4 +1,8 @@
-import { columnNameFromNumber, type Model } from "@ironcalc/wasm";
+import {
+  columnNameFromNumber,
+  type Model,
+  type PivotMarker,
+} from "@ironcalc/wasm";
 import {
   forwardRef,
   useEffect,
@@ -9,6 +13,12 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import Editor from "../Editor/Editor";
+import {
+  type PivotMenuState,
+  PivotMenus,
+} from "../RightDrawer/PivotTable/PivotMenus";
+import { toggleCollapsed } from "../RightDrawer/PivotTable/pivotLogic";
+import { renderPivotMarkers } from "../RightDrawer/PivotTable/pivotMarkers";
 import type { Cell } from "../types";
 import { getEditorSize } from "../util";
 import type { WorkbookActions } from "../Workbook/workbookActions";
@@ -53,6 +63,9 @@ const Worksheet = forwardRef(
       actions: WorkbookActions;
       onEditLink?: (row: number, column: number) => void;
       onDeleteLink?: (row: number, column: number) => void;
+      pivotFieldListOpen: boolean;
+      onTogglePivotFieldList: () => void;
+      onShowPivotSettings: () => void;
     },
     ref,
   ) => {
@@ -73,6 +86,11 @@ const Worksheet = forwardRef(
     const worksheetCanvas = useRef<WorksheetCanvas | null>(null);
 
     const [cellContextMenuOpen, setCellContextMenuOpen] = useState(false);
+    const [pivotMenu, setPivotMenu] = useState<PivotMenuState | null>(null);
+    // Read by the marker buttons, which are created outside of React
+    const pivotMarkerAction = useRef<
+      (marker: PivotMarker, anchor: DOMRect) => void
+    >(() => {});
     const [colHeaderContextMenuOpen, setColHeaderContextMenuOpen] =
       useState(false);
     const [rowHeaderContextMenuOpen, setRowHeaderContextMenuOpen] =
@@ -262,6 +280,35 @@ const Worksheet = forwardRef(
     };
 
     const { model, workbookState, refresh, canEdit, actions } = props;
+    const canEditRef = useRef(canEdit);
+    canEditRef.current = canEdit;
+    pivotMarkerAction.current = (marker, anchor) => {
+      if (marker.kind === "filter") {
+        setPivotMenu({
+          type: "dropdown",
+          marker,
+          x: anchor.left,
+          y: anchor.bottom + 2,
+        });
+        return;
+      }
+      const entry = model
+        .getPivotTables()
+        .find((e) => e.index === marker.index);
+      if (!entry || !marker.item) {
+        return;
+      }
+      try {
+        model.updatePivotTable(
+          marker.index,
+          toggleCollapsed(entry.pivot, marker.field, marker.item),
+          false,
+        );
+        refresh();
+      } catch {
+        setRowColErrorTitle(t("pivot_table.replace_blocked"));
+      }
+    };
     const { t } = useTranslation();
     // Re-renders (and so re-creates the canvas, below) on window resizes
     useWindowSize();
@@ -479,6 +526,15 @@ const Worksheet = forwardRef(
 
       // This render supersedes any repaint a scroll had scheduled
       cancelPendingRender();
+      const paintSheet = canvas.renderSheet.bind(canvas);
+      canvas.renderSheet = (): void => {
+        paintSheet();
+        if (canEditRef.current) {
+          renderPivotMarkers(canvas, (marker, anchor) =>
+            pivotMarkerAction.current(marker, anchor),
+          );
+        }
+      };
       canvas.renderSheet();
       worksheetCanvas.current = canvas;
     });
@@ -732,6 +788,21 @@ const Worksheet = forwardRef(
               }
             }
 
+            const selected = model.getSelectedView();
+            const pivotInfo = model.getPivotCellInfo(
+              selected.sheet,
+              selected.row,
+              selected.column,
+            );
+            if (pivotInfo) {
+              setPivotMenu({
+                type: "cell",
+                info: pivotInfo,
+                x: event.clientX,
+                y: event.clientY,
+              });
+              return;
+            }
             setCellContextMenuOpen(true);
           }}
           onDoubleClick={(event) => {
@@ -812,6 +883,16 @@ const Worksheet = forwardRef(
             />
           ) : null}
         </div>
+        <PivotMenus
+          model={model}
+          state={pivotMenu}
+          onClose={() => setPivotMenu(null)}
+          refresh={refresh}
+          onCopy={actions.copy}
+          fieldListOpen={props.pivotFieldListOpen}
+          onToggleFieldList={props.onTogglePivotFieldList}
+          onShowSettings={props.onShowPivotSettings}
+        />
         <CellContextMenu
           open={cellContextMenuOpen}
           onClose={() => setCellContextMenuOpen(false)}

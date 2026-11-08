@@ -1297,6 +1297,115 @@ impl Model {
     }
 
     // -----------------------------------------------------------------------
+    // PivotTables
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen(
+        js_name = "getPivotTables",
+        unchecked_return_type = "PivotTableEntry[]"
+    )]
+    pub fn get_pivot_tables(&self) -> Result<JsValue, JsError> {
+        serde_wasm_bindgen::to_value(&self.model.get_pivot_tables())
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "getPivotTableAt")]
+    pub fn get_pivot_table_at(&self, sheet: u32, row: i32, column: i32) -> Option<u32> {
+        self.model.get_pivot_table_at(sheet, row, column)
+    }
+
+    #[wasm_bindgen(
+        js_name = "getPivotCellInfo",
+        unchecked_return_type = "PivotCellInfo | null"
+    )]
+    pub fn get_pivot_cell_info(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<JsValue, JsError> {
+        serde_wasm_bindgen::to_value(&self.model.get_pivot_cell_info(sheet, row, column))
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "getPivotMarkers", unchecked_return_type = "PivotMarker[]")]
+    pub fn get_pivot_markers(&self, sheet: u32) -> Result<JsValue, JsError> {
+        serde_wasm_bindgen::to_value(&self.model.get_pivot_markers(sheet))
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    /// Lists on a new sheet the source records behind a value of a pivot.
+    #[wasm_bindgen(js_name = "showPivotDetails")]
+    pub fn show_pivot_details(
+        &mut self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+        new_sheet_name: &str,
+    ) -> Result<u32, JsError> {
+        self.model
+            .show_pivot_details(sheet, row, column, new_sheet_name)
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "getPivotFields", unchecked_return_type = "PivotFieldInfo[]")]
+    pub fn get_pivot_fields(
+        &self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let area = serde_wasm_bindgen::from_value(area).map_err(|e| to_js_error(e.to_string()))?;
+        let fields = self
+            .model
+            .get_pivot_fields(sheet, &area)
+            .map_err(|e| to_js_error(e.to_string()))?;
+        serde_wasm_bindgen::to_value(&fields).map_err(|e| to_js_error(e.to_string()))
+    }
+
+    /// Adds a pivot and returns its index. With `newSheetName` it goes on a new sheet.
+    #[wasm_bindgen(js_name = "createPivotTable")]
+    pub fn create_pivot_table(
+        &mut self,
+        #[wasm_bindgen(unchecked_param_type = "PivotTable")] pivot: JsValue,
+        new_sheet_name: Option<String>,
+        overwrite: bool,
+    ) -> Result<u32, JsError> {
+        let pivot =
+            serde_wasm_bindgen::from_value(pivot).map_err(|e| to_js_error(e.to_string()))?;
+        self.model
+            .create_pivot_table(pivot, new_sheet_name.as_deref(), overwrite)
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "updatePivotTable")]
+    pub fn update_pivot_table(
+        &mut self,
+        index: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotTable")] pivot: JsValue,
+        overwrite: bool,
+    ) -> Result<(), JsError> {
+        let pivot =
+            serde_wasm_bindgen::from_value(pivot).map_err(|e| to_js_error(e.to_string()))?;
+        self.model
+            .update_pivot_table(index, pivot, overwrite)
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "refreshPivotTable")]
+    pub fn refresh_pivot_table(&mut self, index: u32) -> Result<(), JsError> {
+        self.model
+            .refresh_pivot_table(index)
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = "deletePivotTable")]
+    pub fn delete_pivot_table(&mut self, index: u32) -> Result<(), JsError> {
+        self.model
+            .delete_pivot_table(index)
+            .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    // -----------------------------------------------------------------------
     // Conditional formatting
     // -----------------------------------------------------------------------
 

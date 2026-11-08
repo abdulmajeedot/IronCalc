@@ -126,8 +126,9 @@ fn get_tooltip_attribute(tooltip: &Option<String>) -> String {
 }
 
 /// The rels part of the worksheet (`xl/worksheets/_rels/sheetN.xml.rels`) holding one
-/// relationship per external link, or `None` if the worksheet has no external links.
-pub(crate) fn get_worksheet_xml_rels(worksheet: &Worksheet) -> Option<String> {
+/// relationship per external link and per pivot, or `None` if the worksheet has neither.
+/// `pivots` are the part numbers of the pivots on this sheet.
+pub(crate) fn get_worksheet_xml_rels(worksheet: &Worksheet, pivots: &[usize]) -> Option<String> {
     let mut relationships_str: Vec<String> = vec![];
     let mut rel_id = 0;
     for (_, link) in get_sorted_links(worksheet) {
@@ -138,6 +139,12 @@ pub(crate) fn get_worksheet_xml_rels(worksheet: &Worksheet) -> Option<String> {
                 "<Relationship Id=\"rId{rel_id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink\" Target=\"{target}\" TargetMode=\"External\"/>"
             ));
         }
+    }
+    for number in pivots {
+        rel_id += 1;
+        relationships_str.push(format!(
+            "<Relationship Id=\"rId{rel_id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable\" Target=\"../pivotTables/pivotTable{number}.xml\"/>"
+        ));
     }
     if relationships_str.is_empty() {
         return None;

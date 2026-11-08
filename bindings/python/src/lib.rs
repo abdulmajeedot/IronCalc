@@ -198,7 +198,7 @@ pub fn load_from_icalc(file_name: &str, language_id: &str) -> PyResult<PyModel> 
 #[pyfunction]
 #[pyo3(signature = (bytes, language_id="en"))]
 pub fn load_from_bytes(bytes: &[u8], language_id: &str) -> PyResult<PyModel> {
-    let workbook: Workbook = bitcode::decode(bytes).map_err(to_py_err)?;
+    let workbook: Workbook = xlsx::base::pivot::workbook_from_bytes(bytes).map_err(to_py_err)?;
     let language_id = leak_str(language_id);
     let model = Model::from_workbook(workbook, language_id).map_err(to_py_err)?;
     Ok(PyModel { model })
@@ -265,7 +265,7 @@ pub fn create_user_model_from_icalc(file_name: &str, language_id: &str) -> PyRes
 #[pyfunction]
 #[pyo3(signature = (bytes, language_id="en"))]
 pub fn create_user_model_from_bytes(bytes: &[u8], language_id: &str) -> PyResult<PyUserModel> {
-    let workbook: Workbook = bitcode::decode(bytes).map_err(to_py_err)?;
+    let workbook: Workbook = xlsx::base::pivot::workbook_from_bytes(bytes).map_err(to_py_err)?;
     let language_id = leak_str(language_id);
     let model = Model::from_workbook(workbook, language_id).map_err(to_py_err)?;
     let user_model = UserModel::from_model(model);

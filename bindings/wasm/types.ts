@@ -467,6 +467,192 @@ export interface Dxf {
   alignment?: DxfAlignment;
 }
 
+export interface PivotArea {
+  first_row: number;
+  first_column: number;
+  last_row: number;
+  last_column: number;
+}
+
+export type PivotAggregation =
+  | "sum"
+  | "count"
+  | "average"
+  | "max"
+  | "min"
+  | "product"
+  | "count_numbers"
+  | "std_dev"
+  | "std_dev_p"
+  | "var"
+  | "var_p";
+
+export type PivotSubtotals = "none" | "top" | "bottom";
+
+export interface PivotSort {
+  order: "ascending" | "descending" | "manual";
+  /** The caption of the value to sort by, instead of by the labels. */
+  by_value?: string | null;
+}
+
+export type PivotLabelCondition =
+  | "equals"
+  | "not_equals"
+  | "begins_with"
+  | "not_begins_with"
+  | "ends_with"
+  | "not_ends_with"
+  | "contains"
+  | "not_contains"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "between"
+  | "not_between";
+
+export interface PivotLabelFilter {
+  condition: PivotLabelCondition;
+  value: string;
+  value2: string;
+}
+
+export type PivotValueCondition =
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "between"
+  | "not_between";
+
+export type PivotValueRule =
+  | {
+      type: "compare";
+      condition: PivotValueCondition;
+      value: number;
+      value2: number;
+    }
+  | {
+      type: "top";
+      count: number;
+      bottom: boolean;
+      unit: "items" | "percent" | "sum";
+    };
+
+export interface PivotValueFilter {
+  value_name: string;
+  rule: PivotValueRule;
+}
+
+export interface PivotField {
+  field: string;
+  hidden_items: string[];
+  sort: PivotSort;
+  item_order: string[];
+  label_filter?: PivotLabelFilter | null;
+  value_filter?: PivotValueFilter | null;
+  collapsed_items: string[];
+  /** Overrides the pivot's subtotal setting for this field. */
+  subtotal?: PivotSubtotals | null;
+  /** Overrides the pivot's repeat-labels setting for this field. */
+  repeat_labels?: boolean | null;
+  blank_line: boolean;
+}
+
+export type PivotShowAs =
+  | "normal"
+  | "percent_of_total"
+  | "percent_of_column"
+  | "percent_of_row"
+  | "percent_of_parent_row"
+  | "percent_of_parent_column"
+  | "percent_of_parent";
+
+export interface PivotValue {
+  field: string;
+  aggregation: PivotAggregation;
+  /** Custom caption. Empty uses the default, such as "Sum of Sales". */
+  name: string;
+  show_as: PivotShowAs;
+  base_field: string;
+}
+
+export interface PivotCellInfo {
+  index: number;
+  zone:
+    | "filter"
+    | "row_header"
+    | "column_header"
+    | "row_label"
+    | "column_label"
+    | "value"
+    | "total";
+  field?: string | null;
+  level: number;
+  item?: string | null;
+  has_children: boolean;
+  collapsed: boolean;
+  value_index?: number | null;
+  row_path: string[];
+  column_path: string[];
+  read_only: boolean;
+}
+
+export interface PivotMarker {
+  index: number;
+  row: number;
+  column: number;
+  kind: "filter" | "expand" | "collapse";
+  field: string;
+  item?: string | null;
+  filtered: boolean;
+}
+
+export interface PivotOptions {
+  /** A grand total at the end of each row (the rightmost column). */
+  grand_totals_rows: boolean;
+  /** A grand total at the end of each column (the bottom row). */
+  grand_totals_columns: boolean;
+  subtotals: PivotSubtotals;
+  layout: "compact" | "tabular";
+  repeat_labels: boolean;
+}
+
+export interface PivotTable {
+  name: string;
+  sheet_id: number;
+  row: number;
+  column: number;
+  source_sheet_id: number;
+  source: PivotArea;
+  rows: PivotField[];
+  columns: PivotField[];
+  values: PivotValue[];
+  filters: PivotField[];
+  options: PivotOptions;
+  output: PivotArea | null;
+  /** What each line on the sheet shows. Kept up to date by the engine. */
+  output_map?: unknown;
+  style_name: string;
+  read_only: boolean;
+}
+
+export interface PivotTableEntry {
+  index: number;
+  sheet: number;
+  source_sheet: number | null;
+  pivot: PivotTable;
+}
+
+export interface PivotFieldInfo {
+  name: string;
+  /** True if every non-blank value is a number. */
+  numeric: boolean;
+  items: string[];
+}
+
 export interface ConditionalFormatting {
   range: string;
   cf_rule: CfRule;

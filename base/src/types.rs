@@ -120,6 +120,10 @@ pub struct Workbook {
     pub metadata: Metadata,
     pub tables: HashMap<String, Table>,
     pub theme: Theme,
+    /// Saved apart from the rest of the workbook so that files written before
+    /// pivots existed still load: see [`crate::pivot::workbook_to_bytes`].
+    #[bitcode(skip)]
+    pub pivot_tables: Vec<crate::pivot::PivotTable>,
 }
 
 /// A defined name. The `sheet_id` is the sheet index in case the name is local.

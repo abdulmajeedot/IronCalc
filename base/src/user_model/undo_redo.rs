@@ -660,6 +660,15 @@ impl<'a> UserModel<'a> {
                     needs_evaluation = true;
                     self.model.workbook.worksheet_mut(*sheet)?.merged_cells = old_value.clone();
                 }
+                Diff::SetPivotTables {
+                    sheet,
+                    old_pivots,
+                    new_pivots: _,
+                    cells,
+                } => {
+                    needs_evaluation = true;
+                    self.apply_pivot_cells(*sheet, cells, old_pivots, true)?;
+                }
             }
         }
         if needs_evaluation {
@@ -1130,6 +1139,15 @@ impl<'a> UserModel<'a> {
                     // Merged cells block spilling, so a change can affect results
                     needs_evaluation = true;
                     self.model.workbook.worksheet_mut(*sheet)?.merged_cells = new_value.clone();
+                }
+                Diff::SetPivotTables {
+                    sheet,
+                    old_pivots: _,
+                    new_pivots,
+                    cells,
+                } => {
+                    needs_evaluation = true;
+                    self.apply_pivot_cells(*sheet, cells, new_pivots, false)?;
                 }
             }
         }

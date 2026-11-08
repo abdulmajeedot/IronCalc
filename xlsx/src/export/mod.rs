@@ -5,6 +5,7 @@ mod conditional_formatting;
 mod doc_props;
 mod dxfs_styles;
 mod escape;
+mod pivot;
 mod shared_strings;
 mod styles;
 mod styles_util;
@@ -31,7 +32,7 @@ use crate::error::XlsxError;
 #[cfg(test)]
 mod test;
 
-fn get_content_types_xml(workbook: &Workbook) -> String {
+fn get_content_types_xml(workbook: &Workbook, pivots: &[pivot::ExportedPivot]) -> String {
     // A list of all files in the zip
     let mut content = vec![
         r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">"#.to_string(),
@@ -45,6 +46,9 @@ fn get_content_types_xml(workbook: &Workbook) -> String {
             worksheet + 1
         );
         content.push(sheet);
+    }
+    for exported in pivots {
+        content.extend(exported.content_types());
     }
     content.push(
         r#"<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#.to_string(),
@@ -88,7 +92,8 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
 
     // root folder
     zip.start_file("[Content_Types].xml", options)?;
-    zip.write_all(get_content_types_xml(workbook).as_bytes())?;
+    let pivots = pivot::export_pivots(model);
+    zip.write_all(get_content_types_xml(workbook, &pivots).as_bytes())?;
 
     zip.add_directory("docProps", options)?;
     zip.start_file("docProps/app.xml", options)?;
@@ -108,7 +113,7 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
     zip.start_file("xl/styles.xml", options)?;
     zip.write_all(styles::get_styles_xml(workbook).as_bytes())?;
     zip.start_file("xl/workbook.xml", options)?;
-    zip.write_all(workbook::get_workbook_xml(workbook, selected_sheet).as_bytes())?;
+    zip.write_all(workbook::get_workbook_xml(workbook, selected_sheet, &pivots).as_bytes())?;
     zip.start_file("xl/metadata.xml", options)?;
     let metadata_xml = include_str!("metadata.xml");
     zip.write_all(metadata_xml.as_bytes())?;
@@ -119,13 +124,29 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
 
     zip.add_directory("xl/_rels", options)?;
     zip.start_file("xl/_rels/workbook.xml.rels", options)?;
-    zip.write_all(workbook_xml_rels::get_workbook_xml_rels(workbook).as_bytes())?;
+    zip.write_all(workbook_xml_rels::get_workbook_xml_rels(workbook, &pivots).as_bytes())?;
+
+    for exported in &pivots {
+        for (path, contents) in exported.parts() {
+            zip.start_file(path, options)?;
+            zip.write_all(contents.as_bytes())?;
+        }
+        for (path, contents) in exported.rels() {
+            zip.start_file(path, options)?;
+            zip.write_all(contents.as_bytes())?;
+        }
+    }
 
     zip.add_directory("xl/worksheets", options)?;
     // sheet rels parts (one per sheet with external hyperlinks)
     let mut has_worksheet_rels = false;
     for (sheet_index, worksheet) in workbook.worksheets.iter().enumerate() {
-        if let Some(rels_xml) = worksheets::get_worksheet_xml_rels(worksheet) {
+        let sheet_pivots: Vec<usize> = pivots
+            .iter()
+            .filter(|p| p.sheet_index == sheet_index)
+            .map(|p| p.number)
+            .collect();
+        if let Some(rels_xml) = worksheets::get_worksheet_xml_rels(worksheet, &sheet_pivots) {
             if !has_worksheet_rels {
                 zip.add_directory("xl/worksheets/_rels", options)?;
                 has_worksheet_rels = true;
@@ -172,7 +193,7 @@ pub fn save_to_icalc(model: &Model, file_name: &str) -> Result<(), XlsxError> {
     if file_path.exists() {
         return Err(XlsxError::IO(format!("file {file_name} already exists")));
     }
-    let s = bitcode::encode(&model.workbook);
+    let s = model.to_bytes();
     let mut file = fs::File::create(file_path)?;
     file.write_all(&s)?;
 

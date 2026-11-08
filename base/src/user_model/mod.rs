@@ -11,6 +11,7 @@ pub(crate) mod history;
 mod links;
 mod merged_cells;
 mod named_cell_styles;
+mod pivot;
 mod sequence_detector;
 mod ui;
 mod undo_redo;
