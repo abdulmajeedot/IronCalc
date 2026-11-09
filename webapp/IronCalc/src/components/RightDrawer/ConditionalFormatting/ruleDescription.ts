@@ -84,6 +84,12 @@ export function getRuleDescription({
     });
   }
 
+  if (ruleType === "top_bottom") {
+    return t(`conditional_formatting.desc_top_bottom_${ruleOperator}`, {
+      value: ruleValue,
+    });
+  }
+
   if (ruleType === "formula") {
     if (v) {
       return t("conditional_formatting.desc_formula", { value: v });

@@ -73,6 +73,9 @@ import {
 import { Menu } from "../Menu/Menu";
 import { MenuDivider } from "../Menu/MenuDivider";
 import { MenuItem } from "../Menu/MenuItem";
+import ConditionalFormattingMenu, {
+  type CfMenuAction,
+} from "../RightDrawer/ConditionalFormatting/ConditionalFormattingMenu";
 import ThemeMenu from "../ThemeMenu/ThemeMenu";
 import "./toolbar.css";
 import { Tooltip } from "../Tooltip/Tooltip";
@@ -128,7 +131,7 @@ type ToolbarProperties = {
   showGridLines: boolean;
   onToggleShowGridLines: (show: boolean) => void;
   formatOptions: FmtSettings;
-  onOpenConditionalFormatting: () => void;
+  onConditionalFormattingAction: (action: CfMenuAction) => void;
   isConditionalFormattingOpen: boolean;
   onOpenPivotTable: () => void;
   isPivotTableOpen: boolean;
@@ -154,6 +157,10 @@ type ToolbarProperties = {
 };
 
 function Toolbar(properties: ToolbarProperties) {
+  const [cfMenuAnchor, setCfMenuAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
   const [fontColorPickerOpen, setFontColorPickerOpen] = useState(false);
   const [fillColorPickerOpen, setFillColorPickerOpen] = useState(false);
   const [borderPickerOpen, setBorderPickerOpen] = useState(false);
@@ -519,10 +526,21 @@ function Toolbar(properties: ToolbarProperties) {
               icon={<Brush />}
               aria-label={t("toolbar.conditional_formatting")}
               pressed={properties.isConditionalFormattingOpen}
-              onClick={properties.onOpenConditionalFormatting}
+              onClick={(event) => {
+                const { left, bottom } =
+                  event.currentTarget.getBoundingClientRect();
+                setCfMenuAnchor({ x: left, y: bottom + 2 });
+              }}
               disabled={!canEdit}
             />
           </Tooltip>
+          {cfMenuAnchor ? (
+            <ConditionalFormattingMenu
+              anchor={cfMenuAnchor}
+              onClose={() => setCfMenuAnchor(null)}
+              onAction={properties.onConditionalFormattingAction}
+            />
+          ) : null}
           <Tooltip title={t("toolbar.pivot_table")}>
             <IconButton
               icon={<TableProperties />}

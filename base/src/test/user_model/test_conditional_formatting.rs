@@ -4,7 +4,7 @@
 use crate::{
     cf_types::{CfRule, CfRuleInput, Cfvo, ColorScaleThreshold, Icon, ValueOperator},
     test::user_model::util::new_empty_user_model,
-    types::{Color, Dxf, Fill},
+    types::{Color, Dxf, DxfFont, Fill},
 };
 
 fn color_scale() -> CfRuleInput {
@@ -1219,4 +1219,190 @@ fn test_undo_redo_lower_priority() {
 
     model.redo().unwrap();
     assert_eq!(priorities(&model), vec![2, 1]);
+}
+
+// ---------------------------------------------------------------------------
+// "Cell value" rules compare like a formula and duplicates skip empty cells
+// ---------------------------------------------------------------------------
+
+fn bold() -> Dxf {
+    Dxf {
+        font: Some(DxfFont {
+            b: Some(true),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+fn cell_is(operator: ValueOperator, formula: &str) -> CfRuleInput {
+    CfRuleInput::CellIs {
+        operator,
+        formula: formula.to_string(),
+        formula2: None,
+        format: bold(),
+        stop_if_true: false,
+    }
+}
+
+fn duplicates() -> CfRuleInput {
+    CfRuleInput::DuplicateValues {
+        format: bold(),
+        stop_if_true: false,
+    }
+}
+
+fn highlighted(model: &crate::UserModel, row: i32, column: i32) -> bool {
+    model
+        .get_extended_cell_style(0, row, column)
+        .unwrap()
+        .style
+        .font
+        .b
+}
+
+fn mixed_column() -> crate::UserModel<'static> {
+    let mut model = new_empty_user_model();
+    for (row, value) in [(1, "5"), (2, "20"), (3, "abc"), (5, "TRUE"), (6, "=1/0")] {
+        model.set_user_input(0, row, 1, value).unwrap();
+    }
+    model
+}
+
+#[test]
+fn less_than_counts_an_empty_cell_as_zero() {
+    let mut model = mixed_column();
+    model
+        .add_conditional_formatting(0, "A1:A6", cell_is(ValueOperator::LessThan, "10"))
+        .unwrap();
+    let found: Vec<bool> = (1..=6).map(|row| highlighted(&model, row, 1)).collect();
+    assert_eq!(found, [true, false, false, true, false, false]);
+}
+
+#[test]
+fn greater_than_ranks_text_and_booleans_above_numbers() {
+    let mut model = mixed_column();
+    model
+        .add_conditional_formatting(0, "A1:A6", cell_is(ValueOperator::GreaterThan, "10"))
+        .unwrap();
+    let found: Vec<bool> = (1..=6).map(|row| highlighted(&model, row, 1)).collect();
+    assert_eq!(found, [false, true, true, false, true, false]);
+}
+
+#[test]
+fn a_relative_value_follows_each_row() {
+    let mut model = new_empty_user_model();
+    for (row, other) in [(2, "1"), (3, "9"), (4, "1")] {
+        model.set_user_input(0, row, 1, "5").unwrap();
+        model.set_user_input(0, row, 2, other).unwrap();
+    }
+    model
+        .add_conditional_formatting(0, "A2:A4", cell_is(ValueOperator::GreaterThan, "=B2"))
+        .unwrap();
+    assert!(highlighted(&model, 2, 1));
+    assert!(!highlighted(&model, 3, 1));
+    assert!(highlighted(&model, 4, 1));
+}
+
+#[test]
+fn an_absolute_value_stays_on_its_cell() {
+    let mut model = new_empty_user_model();
+    model.set_user_input(0, 1, 3, "7").unwrap();
+    for row in 1..=2 {
+        model.set_user_input(0, row, 1, "8").unwrap();
+    }
+    model
+        .add_conditional_formatting(0, "A1:A2", cell_is(ValueOperator::GreaterThan, "=$C$1"))
+        .unwrap();
+    assert!(highlighted(&model, 2, 1));
+    model.set_user_input(0, 1, 3, "9").unwrap();
+    assert!(!highlighted(&model, 2, 1));
+}
+
+#[test]
+fn typed_values_become_formulas() {
+    let model = new_empty_user_model();
+    let model = model.get_model();
+    for (typed, formula) in [
+        ("1000", "1000"),
+        ("1,000", "1000"),
+        ("$1,000", "1000"),
+        ("50%", "0.5"),
+        ("1/1/2025", "45658"),
+        ("=$C$1", "=$C$1"),
+        ("TRUE", "TRUE"),
+        ("abc", "\"abc\""),
+        ("say \"hi\"", "\"say \"\"hi\"\"\""),
+    ] {
+        assert_eq!(model.cf_value_to_formula(typed), formula, "{typed}");
+    }
+}
+
+#[test]
+fn a_text_value_compares_without_case() {
+    let mut model = new_empty_user_model();
+    model.set_user_input(0, 1, 1, "Apple").unwrap();
+    model.set_user_input(0, 2, 1, "Pear").unwrap();
+    model
+        .add_conditional_formatting(0, "A1:A2", cell_is(ValueOperator::Equal, "\"apple\""))
+        .unwrap();
+    assert!(highlighted(&model, 1, 1));
+    assert!(!highlighted(&model, 2, 1));
+}
+
+#[test]
+fn a_rule_on_the_whole_sheet_still_reaches_every_cell() {
+    let mut model = new_empty_user_model();
+    model.set_user_input(0, 1, 1, "50").unwrap();
+    model.set_user_input(0, 2, 1, "5").unwrap();
+    model
+        .add_conditional_formatting(0, "A1:XFD1048576", cell_is(ValueOperator::LessThan, "10"))
+        .unwrap();
+    assert!(!highlighted(&model, 1, 1));
+    assert!(highlighted(&model, 2, 1));
+    assert!(highlighted(&model, 3, 1));
+    assert!(highlighted(&model, 1, 2));
+    assert!(highlighted(&model, 1_048_576, 16_384));
+    model.set_user_input(0, 500, 3, "99").unwrap();
+    assert!(!highlighted(&model, 500, 3));
+    assert!(highlighted(&model, 501, 3));
+}
+
+#[test]
+fn duplicates_on_the_whole_sheet_only_look_at_filled_cells() {
+    let mut model = new_empty_user_model();
+    model.set_user_input(0, 1, 1, "x").unwrap();
+    model.set_user_input(0, 9, 7, "X").unwrap();
+    model.set_user_input(0, 2, 1, "y").unwrap();
+    model
+        .add_conditional_formatting(0, "A1:XFD1048576", duplicates())
+        .unwrap();
+    assert!(highlighted(&model, 1, 1));
+    assert!(highlighted(&model, 9, 7));
+    assert!(!highlighted(&model, 2, 1));
+    assert!(!highlighted(&model, 3, 1));
+}
+
+#[test]
+fn ranges_can_be_written_the_ways_excel_accepts() {
+    for (typed, stored) in [
+        ("$A$1:$B$2", "A1:B2"),
+        ("A:B", "A1:B1048576"),
+        ("$C:$C", "C1:C1048576"),
+        ("2:3", "A2:XFD3"),
+        ("A1:A2,C1", "A1:A2 C1"),
+    ] {
+        let mut model = new_empty_user_model();
+        model
+            .add_conditional_formatting(0, typed, duplicates())
+            .unwrap();
+        model.undo().unwrap();
+        model.redo().unwrap();
+        let list = model.get_conditional_formatting_list(0).unwrap();
+        assert_eq!(list[0].range, stored);
+    }
+    let mut model = new_empty_user_model();
+    assert!(model
+        .add_conditional_formatting(0, "A1 nonsense", duplicates())
+        .is_err());
 }

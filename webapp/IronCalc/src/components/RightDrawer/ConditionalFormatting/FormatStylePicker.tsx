@@ -34,6 +34,12 @@ const DEFAULT_STYLE: FormatStyle = {
 };
 
 const PRESETS: FormatStyle[] = [
+  // Excel's styles
+  { ...DEFAULT_STYLE, fontColor: "#9C0006", fillColor: "#FFC7CE" },
+  { ...DEFAULT_STYLE, fontColor: "#9C5700", fillColor: "#FFEB9C" },
+  { ...DEFAULT_STYLE, fontColor: "#006100", fillColor: "#C6EFCE" },
+  { ...DEFAULT_STYLE, fontColor: "", fillColor: "#FFC7CE" },
+  { ...DEFAULT_STYLE, fontColor: "#9C0006", fillColor: "" },
   { ...DEFAULT_STYLE, fontColor: "#D21D21", fillColor: "#FBE7E8" },
   { ...DEFAULT_STYLE, fontColor: "#D21D21", fillColor: "" },
   { ...DEFAULT_STYLE, fontColor: "#8B6F00", fillColor: "#FEF9E8" },

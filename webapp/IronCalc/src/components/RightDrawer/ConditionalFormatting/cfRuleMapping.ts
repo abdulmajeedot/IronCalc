@@ -110,6 +110,7 @@ const DXF_RULE_TYPES = new Set([
   "no_blanks",
   "errors",
   "no_errors",
+  "top_bottom",
 ]);
 
 export function ruleTypeUsesDxf(ruleType: string): boolean {
@@ -257,6 +258,21 @@ function findPresetIdByIcons(icons: Icon[]): string {
     }
   }
   return FALLBACK_PRESET_BY_COUNT[n] ?? "dir-3-arrows-color";
+}
+
+// What the value box shows for a rule's formula: a plain number as it is,
+// anything else as a formula, the way it would be typed.
+function formulaToValue(formula: string): string {
+  return formula.startsWith("=") || /^-?[\d.,]+(e[+-]?\d+)?$/i.test(formula)
+    ? formula
+    : `=${formula}`;
+}
+
+// The first cell of a selection as a value that stays on that cell in every
+// row of the rule.
+export function selectionToValue(area: string): string {
+  const first = area.split(":")[0].replace(/\$/g, "");
+  return first.replace(/^([A-Z]+)(\d+)$/i, "=$$$1$$$2");
 }
 
 function thresholdToCfvo(th: { type: ThresholdType; value: string }): Cfvo {
@@ -577,6 +593,37 @@ export function ruleDataToCfRule(data: RuleData): CfRuleInput | null {
         format: formatStyleToDxf(data.formatStyle),
         stop_if_true: data.stopIfTrue ?? false,
       };
+    case "top_bottom": {
+      const format = formatStyleToDxf(data.formatStyle);
+      const stop_if_true = data.stopIfTrue ?? false;
+      const rank = Math.round(Number(data.ruleValue));
+      switch (data.ruleOperator) {
+        case "above_average":
+          return { type: "AboveAverage", format, stop_if_true };
+        case "below_average":
+          return { type: "BelowAverage", format, stop_if_true };
+        case "top_items":
+        case "top_percent":
+          return {
+            type: "Top10",
+            rank,
+            percent: data.ruleOperator === "top_percent",
+            format,
+            stop_if_true,
+          };
+        case "bottom_items":
+        case "bottom_percent":
+          return {
+            type: "Bottom10",
+            rank,
+            percent: data.ruleOperator === "bottom_percent",
+            format,
+            stop_if_true,
+          };
+        default:
+          return null;
+      }
+    }
     case "formula":
       return {
         type: "Formula",
@@ -710,8 +757,8 @@ export function cfRuleToRuleData(
       return {
         ruleType: "cell_value",
         ruleOperator,
-        ruleValue: cf_rule.formula,
-        ruleValue2: cf_rule.formula2 ?? "",
+        ruleValue: formulaToValue(cf_rule.formula),
+        ruleValue2: cf_rule.formula2 ? formulaToValue(cf_rule.formula2) : "",
         stopIfTrue: cf_rule.stop_if_true,
       };
     }
@@ -785,6 +832,27 @@ export function cfRuleToRuleData(
       return {
         ruleType: "no_errors",
         ruleOperator: "",
+        ruleValue: "",
+        ruleValue2: "",
+        stopIfTrue: cf_rule.stop_if_true,
+      };
+    case "Top10":
+    case "Bottom10": {
+      const side = cf_rule.type === "Top10" ? "top" : "bottom";
+      return {
+        ruleType: "top_bottom",
+        ruleOperator: `${side}_${cf_rule.percent ? "percent" : "items"}`,
+        ruleValue: `${cf_rule.rank}`,
+        ruleValue2: "",
+        stopIfTrue: cf_rule.stop_if_true,
+      };
+    }
+    case "AboveAverage":
+    case "BelowAverage":
+      return {
+        ruleType: "top_bottom",
+        ruleOperator:
+          cf_rule.type === "AboveAverage" ? "above_average" : "below_average",
         ruleValue: "",
         ruleValue2: "",
         stopIfTrue: cf_rule.stop_if_true,

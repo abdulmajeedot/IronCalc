@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../Button/Button";
@@ -20,7 +20,6 @@ import { IconButton } from "../../Button/IconButton";
 import { resolveColorToHex } from "../../ColorPicker/util";
 import {
   isRangeInRanges,
-  isValidRanges,
   parseRangeInSheet,
   parseRect,
 } from "../../Editor/util";
@@ -59,6 +58,14 @@ interface ConditionalFormattingProps {
   onUpdate: () => void;
   model: Model;
   currentTheme: IronCalcTheme;
+  // What the toolbar menu last asked this panel to show
+  request?: CfDrawerRequest | null;
+}
+
+export interface CfDrawerRequest {
+  id: number;
+  view: "new" | "manage";
+  preset?: Partial<RuleData>;
 }
 
 const ConditionalFormatting = ({
@@ -68,9 +75,17 @@ const ConditionalFormatting = ({
   onUpdate,
   model,
   currentTheme,
+  request,
 }: ConditionalFormattingProps) => {
+  const [saveFailed, setSaveFailed] = useState(false);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [isCreatingNew, setIsCreatingNew] = useState(false);
+  const [isCreatingNew, setIsCreatingNew] = useState(request?.view === "new");
+  useEffect(() => {
+    if (request) {
+      setEditingRule(null);
+      setIsCreatingNew(request.view === "new");
+    }
+  }, [request]);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterOption, setFilterOption] = useState("sheet");
   const listBodyRef = useRef<HTMLDivElement>(null);
@@ -95,7 +110,7 @@ const ConditionalFormatting = ({
     if (!val.trim()) {
       return val;
     }
-    const parsed = parseRangeInSheet(model, val);
+    const parsed = parseRangeInSheet(model, val.replace(/^=/, ""));
     if (parsed) {
       const [sheetIdx, row, col] = parsed;
       const resolved = model.getFormattedCellValue(sheetIdx, row, col);
@@ -157,6 +172,7 @@ const ConditionalFormatting = ({
   const isEditView = isCreatingNew || editingRule !== null;
 
   const handleCancel = () => {
+    setSaveFailed(false);
     setIsCreatingNew(false);
     setEditingRule(null);
   };
@@ -166,22 +182,31 @@ const ConditionalFormatting = ({
     if (!cfRule) {
       return;
     }
+    if (cfRule.type === "CellIs") {
+      cfRule.formula = model.cfValueToFormula(cfRule.formula);
+      if (cfRule.formula2 !== null) {
+        cfRule.formula2 = model.cfValueToFormula(cfRule.formula2);
+      }
+    }
     const applyTo = data.applyTo;
-    if (!isValidRanges(applyTo)) {
+    try {
+      if (editingRule) {
+        model.updateConditionalFormatting(
+          sheet,
+          parseInt(editingRule.id, 10),
+          applyTo,
+          cfRule,
+        );
+        setEditingRule(null);
+      } else {
+        model.addConditionalFormatting(sheet, applyTo, cfRule);
+        setIsCreatingNew(false);
+      }
+    } catch {
+      setSaveFailed(true);
       return;
     }
-    if (editingRule) {
-      model.updateConditionalFormatting(
-        sheet,
-        parseInt(editingRule.id, 10),
-        applyTo,
-        cfRule,
-      );
-      setEditingRule(null);
-    } else {
-      model.addConditionalFormatting(sheet, applyTo, cfRule);
-      setIsCreatingNew(false);
-    }
+    setSaveFailed(false);
     onUpdate();
   };
 
@@ -301,8 +326,10 @@ const ConditionalFormatting = ({
         </div>
         <div className="ic-cf-content">
           <EditRule
+            key={editingRule ? editingRule.id : `new-${request?.id ?? 0}`}
             onSave={handleSave}
             onCancel={handleCancel}
+            saveFailed={saveFailed}
             getSelectedArea={getSanitizedSelectedArea}
             resolveValue={resolveRef}
             currentTheme={currentTheme}
@@ -321,6 +348,7 @@ const ConditionalFormatting = ({
                   fontColor: "#D21D21",
                   fillColor: "#FBE7E8",
                 },
+                ...(isCreatingNew ? request?.preset : undefined),
               }
             }
           />

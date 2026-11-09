@@ -33,6 +33,7 @@ pub(crate) struct TableSnapshot {
     comments: Option<(u32, Vec<Comment>)>,
     validations: Vec<crate::data_validation::DataValidation>,
     sheet_filters: Vec<SheetFilter>,
+    conditional: Option<(u32, Vec<crate::cf_types::ConditionalFormatting>)>,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -86,6 +87,7 @@ impl UserModel<'_> {
             comments: None,
             validations: self.model.workbook.data_validations.clone(),
             sheet_filters: self.model.workbook.sheet_filters.clone(),
+            conditional: None,
         }
     }
 
@@ -97,6 +99,12 @@ impl UserModel<'_> {
             .worksheets
             .get(sheet as usize)
             .map(|worksheet| (sheet, worksheet.comments.clone()));
+        snapshot.conditional = self
+            .model
+            .workbook
+            .worksheets
+            .get(sheet as usize)
+            .map(|worksheet| (sheet, worksheet.conditional_formatting.clone()));
         snapshot
     }
 
@@ -114,7 +122,9 @@ impl UserModel<'_> {
     /// rows or columns are deleted.
     pub(super) fn table_snapshot_diff(&self, sheet: u32) -> Option<Diff> {
         let workbook = &self.model.workbook;
-        let has_comments = !workbook.worksheets.get(sheet as usize)?.comments.is_empty();
+        let worksheet = workbook.worksheets.get(sheet as usize)?;
+        let has_comments =
+            !worksheet.comments.is_empty() || !worksheet.conditional_formatting.is_empty();
         if workbook.tables.is_empty()
             && workbook.slicers.is_empty()
             && workbook.data_validations.is_empty()
@@ -136,6 +146,11 @@ impl UserModel<'_> {
         if let Some((sheet, comments)) = &snapshot.comments {
             if let Some(worksheet) = self.model.workbook.worksheets.get_mut(*sheet as usize) {
                 worksheet.comments = comments.clone();
+            }
+        }
+        if let Some((sheet, conditional)) = &snapshot.conditional {
+            if let Some(worksheet) = self.model.workbook.worksheets.get_mut(*sheet as usize) {
+                worksheet.conditional_formatting = conditional.clone();
             }
         }
         self.model.sync_table_parser();

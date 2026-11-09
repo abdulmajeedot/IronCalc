@@ -336,6 +336,17 @@ pub struct ConditionalFormattingView {
 // Evaluated CF result for a single cell (transient, not stored in Workbook).
 // ---------------------------------------------------------------------------
 
+/// A "cell value" rule on a very large area whose answer for an empty cell
+/// is yes. It covers the cells past the sheet's data without listing them.
+#[derive(Clone, Debug)]
+pub(crate) struct CfBeyondData {
+    pub(crate) ranges: Vec<(i32, i32, i32, i32)>,
+    pub(crate) last_row: i32,
+    pub(crate) last_column: i32,
+    pub(crate) dxf_id: u32,
+    pub(crate) stop_if_true: bool,
+}
+
 /// The winning CF result for a cell, stored in Model::cf_cache after evaluate().
 #[derive(Clone, Debug)]
 pub(crate) enum CfCellResult {
@@ -411,6 +422,24 @@ pub struct CfRating {
 /// ordered from lowest to highest value bucket.
 /// `name` is the XLSX `iconSetType` attribute value (e.g. `"3TrafficLights2"`).
 /// Returns `None` for unknown names.
+/// The rule Excel makes from an icon set: equal percent bands, lowest first.
+pub fn icon_set_thresholds(name: &str) -> Option<Vec<IconThreshold>> {
+    let icons = icon_set_icons(name)?;
+    let count = icons.len() as f64;
+    Some(
+        icons
+            .into_iter()
+            .enumerate()
+            .map(|(index, (icon, color))| IconThreshold {
+                icon,
+                cfvo: Cfvo::Percent((index as f64 * 100.0 / count).round()),
+                color,
+                is_strict: true,
+            })
+            .collect(),
+    )
+}
+
 pub fn icon_set_icons(name: &str) -> Option<Vec<(Icon, Color)>> {
     let s = |c: &'static str| Color::Rgb(c.to_string());
     match name {

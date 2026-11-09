@@ -1,6 +1,8 @@
 use crate::cf_types::{CfRule, Cfvo};
+use crate::conditional_formatting::parse_sqref;
 use crate::constants::{LAST_COLUMN, LAST_ROW};
 use crate::cut_paste::cf_sqref_anchor;
+use crate::data_validation::{ranges_after_block, sqref_of};
 use crate::expressions::parser::displace::{displaced_node, Displacement};
 use crate::expressions::parser::static_analysis::{run_static_analysis_on_node, StaticResult};
 use crate::expressions::parser::stringify::{to_string_displaced, DisplaceData};
@@ -320,6 +322,16 @@ fn displace_cf_sqref_part(part: &str, data: &DisplaceData, sheet: u32) -> String
 
 /// Displaces every part of a space-separated sqref string.
 fn displace_cf_sqref(sqref: &str, data: &DisplaceData, sheet: u32) -> String {
+    if matches!(
+        data,
+        DisplaceData::BlockDown { .. } | DisplaceData::BlockRight { .. }
+    ) {
+        let ranges: Vec<_> = parse_sqref(sqref)
+            .into_iter()
+            .flat_map(|range| ranges_after_block(range, data))
+            .collect();
+        return sqref_of(&ranges);
+    }
     sqref
         .split_whitespace()
         .map(|p| displace_cf_sqref_part(p, data, sheet))
@@ -650,8 +662,7 @@ impl<'a> Model<'a> {
             )
         };
         self.displace_formulas(&displace, moved)?;
-        self.displace_comments(sheet, &displace);
-        self.displace_data_validations(sheet, &displace);
+        self.displace_cf_ranges(sheet, &displace);
         Ok(())
     }
 
@@ -783,6 +794,10 @@ impl<'a> Model<'a> {
             self.workbook.worksheets[sheet as usize].conditional_formatting[idx].range = new_range;
             self.workbook.worksheets[sheet as usize].conditional_formatting[idx].cf_rule = new_rule;
         }
+        // A block can move every cell of a rule out from under it
+        self.workbook.worksheets[sheet as usize]
+            .conditional_formatting
+            .retain(|cf| !cf.range.is_empty());
         self.parser.set_locale(locale);
         self.parser.set_language(language);
     }

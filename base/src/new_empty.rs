@@ -739,6 +739,7 @@ impl<'a> Model<'a> {
             last_lambda_id: 0,
             evaluation: crate::evaluation::Evaluation::default(),
             cf_cache: HashMap::new(),
+            cf_beyond_data: HashMap::new(),
             table_render: vec![],
             links: HashMap::new(),
         };

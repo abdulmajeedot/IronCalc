@@ -160,9 +160,7 @@ impl UserModel<'_> {
             for c in column..=last_column {
                 // A conditionally formatted cell gets an entry of its own:
                 // its style also depends on its value.
-                let key = if model.cf_cache.contains_key(&(sheet, r, c))
-                    || model.table_covers(sheet, r, c)
-                {
+                let key = if model.has_cf_result(sheet, r, c) || model.table_covers(sheet, r, c) {
                     None
                 } else {
                     // A neighbour only matters through the border on the

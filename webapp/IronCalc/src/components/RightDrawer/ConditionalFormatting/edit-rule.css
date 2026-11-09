@@ -49,10 +49,16 @@
   text-overflow: ellipsis;
 }
 
+.ic-edit-rule-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--palette-error-main);
+}
+
 .ic-edit-rule-tabs {
   display: flex;
   flex-direction: row;
-  height: 44px;
+  flex-wrap: wrap;
   flex-shrink: 0;
   border-bottom: 1px solid var(--palette-grey-300);
   position: sticky;
@@ -62,8 +68,9 @@
 }
 
 .ic-edit-rule-tab.ic-button {
-  flex: 1;
-  height: 100%;
+  flex: 1 1 30%;
+  height: 36px;
+  white-space: nowrap;
   border-radius: 0;
   font-size: 12px;
   font-weight: 400;

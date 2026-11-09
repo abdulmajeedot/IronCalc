@@ -6,6 +6,7 @@ import type {
 } from "@ironcalc/wasm";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
+import type { CfDrawerRequest } from "./ConditionalFormatting/ConditionalFormatting";
 import ConditionalFormatting from "./ConditionalFormatting/ConditionalFormatting";
 import NamedRanges from "./NamedRanges/NamedRanges";
 import NamedStylesPanel from "./NamedStyles/NamedStylesPanel";
@@ -49,6 +50,7 @@ interface RightDrawerProps {
   getSelectedArea: () => string;
   drawerType: DrawerType;
   slicerName: string | null;
+  cfRequest: CfDrawerRequest | null;
   onTableDialog: (dialog: TableDialogState) => void;
   // Themes props
   themes: IronCalcTheme[];
@@ -82,6 +84,7 @@ const RightDrawer = ({
   onUpdate,
   drawerType,
   slicerName,
+  cfRequest,
   onTableDialog,
   themes,
   currentTheme,
@@ -216,6 +219,7 @@ const RightDrawer = ({
             onUpdate={onUpdate}
             model={model}
             currentTheme={currentTheme}
+            request={cfRequest}
           />
         );
       case "pivotTable":

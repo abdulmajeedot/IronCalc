@@ -7,7 +7,7 @@ import type {
   Model,
   WorksheetProperties,
 } from "@ironcalc/wasm";
-import { type Color, getThemeList } from "@ironcalc/wasm";
+import { type Color, columnNameFromNumber, getThemeList } from "@ironcalc/wasm";
 import {
   type ForwardedRef,
   forwardRef,
@@ -28,6 +28,8 @@ import {
 } from "../DataTools/DataValidationDialog";
 import { RemoveDuplicatesDialog } from "../DataTools/RemoveDuplicatesDialog";
 import FormulaBar from "../FormulaBar/FormulaBar";
+import type { CfDrawerRequest } from "../RightDrawer/ConditionalFormatting/ConditionalFormatting";
+import type { CfMenuAction } from "../RightDrawer/ConditionalFormatting/ConditionalFormattingMenu";
 import type { SaveError } from "../RightDrawer/NamedStyles/EditNamedStyle";
 import RightDrawer, {
   DEFAULT_DRAWER_WIDTH,
@@ -129,6 +131,7 @@ const Workbook = (
   // and closes on leaving one, unless the user opened it with the toolbar.
   const pivotPanelFollowsSelection = useRef(false);
   const [tableDialog, setTableDialog] = useState<TableDialogState | null>(null);
+  const [cfRequest, setCfRequest] = useState<CfDrawerRequest | null>(null);
   const [dataValidationOpen, setDataValidationOpen] = useState(false);
   const [removeDuplicatesOpen, setRemoveDuplicatesOpen] = useState(false);
   const [slicerName, setSlicerName] = useState<string | null>(null);
@@ -686,6 +689,64 @@ const Workbook = (
 
   // FIXME: I *think* we should have only one on onKeyPressed function that goes to
   // the Rust backend
+  const runCfAction = (action: CfMenuAction): void => {
+    const openCf = (request: Omit<CfDrawerRequest, "id">): void => {
+      setCfRequest((last) => ({ ...request, id: (last?.id ?? 0) + 1 }));
+      openDrawer("conditionalFormatting");
+    };
+    if (action.type === "new") {
+      openCf({ view: "new" });
+      return;
+    }
+    if (action.type === "manage") {
+      openCf({ view: "manage" });
+      return;
+    }
+    if (action.type === "edit") {
+      openCf({ view: "new", preset: action.preset });
+      return;
+    }
+    const {
+      sheet,
+      range: [a, b, c, d],
+    } = model.getSelectedView();
+    const [r1, c1, r2, c2] = [
+      Math.min(a, c),
+      Math.min(b, d),
+      Math.max(a, c),
+      Math.max(b, d),
+    ];
+    try {
+      if (action.type === "clear") {
+        model.clearConditionalFormatting(
+          sheet,
+          action.scope === "sheet"
+            ? null
+            : {
+                first_row: r1,
+                first_column: c1,
+                last_row: r2,
+                last_column: c2,
+              },
+        );
+      } else {
+        const name = (row: number, column: number) =>
+          `${columnNameFromNumber(column)}${row}`;
+        const area =
+          r1 === r2 && c1 === c2
+            ? name(r1, c1)
+            : `${name(r1, c1)}:${name(r2, c2)}`;
+        model.addConditionalFormatting(sheet, area, action.rule);
+      }
+    } catch (e) {
+      setAlertDialog({
+        title: t("toolbar.conditional_formatting"),
+        message: `${e}`,
+      });
+    }
+    setRedrawId((id) => id + 1);
+  };
+
   const sheetFilter = canEdit
     ? (model.getSheetFilter(model.getSelectedSheet()) ?? null)
     : null;
@@ -1296,9 +1357,7 @@ const Workbook = (
             setRedrawId((id) => id + 1);
           }}
           formatOptions={fmtSettings}
-          onOpenConditionalFormatting={() =>
-            openDrawer("conditionalFormatting")
-          }
+          onConditionalFormattingAction={runCfAction}
           isConditionalFormattingOpen={
             isDrawerOpen && drawerType === "conditionalFormatting"
           }
@@ -1556,6 +1615,7 @@ const Workbook = (
         }}
         drawerType={drawerType}
         slicerName={slicerName}
+        cfRequest={cfRequest}
         onTableDialog={setTableDialog}
         themes={themes}
         currentTheme={model.getTheme()}

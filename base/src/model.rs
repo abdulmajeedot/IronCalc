@@ -343,6 +343,8 @@ pub struct Model<'a> {
     /// Evaluated CF results per cell, keyed by (sheet_index, row, column).
     /// Rebuilt from scratch on every call to evaluate_conditional_formatting().
     pub(crate) cf_cache: HashMap<(u32, i32, i32), Vec<CfCellResult>>,
+    /// By sheet, the rules that also format the empty cells past its data.
+    pub(crate) cf_beyond_data: HashMap<u32, Vec<crate::cf_types::CfBeyondData>>,
     /// What drawing needs to know about each table. Rebuilt on every evaluation.
     pub(crate) table_render: Vec<crate::table::TableRender>,
     /// Dynamic links: links created by formulas like HYPERLINK
@@ -1988,6 +1990,7 @@ impl<'a> Model<'a> {
             last_lambda_id: 0,
             evaluation: Evaluation::default(),
             cf_cache: HashMap::new(),
+            cf_beyond_data: HashMap::new(),
             table_render: vec![],
             links: HashMap::new(),
         };

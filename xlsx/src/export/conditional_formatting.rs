@@ -75,6 +75,13 @@ fn value_operator_to_str(op: &ValueOperator) -> &'static str {
     }
 }
 
+fn text_operator_name(op: &TextOperator) -> &'static str {
+    match op {
+        TextOperator::DoesNotContain => "notContains",
+        other => text_operator_to_type(other),
+    }
+}
+
 fn text_operator_to_type(op: &TextOperator) -> &'static str {
     match op {
         TextOperator::Contains => "containsText",
@@ -217,11 +224,54 @@ fn icon_rating_set_name(icon: &Icon, count: usize) -> Option<&'static str> {
     match (icon, count) {
         (Icon::Star, 3) => Some("3Stars"),
         (Icon::Circle, 5) => Some("5Quarters"),
-        (_, 3) => Some("3Rating"),
+        // Excel has no other three-icon rating
+        (_, 3) => Some("3Stars"),
         (_, 4) => Some("4Rating"),
         (_, 5) => Some("5Rating"),
         _ => None,
     }
+}
+
+// Excel only knows these inside its x14 extension.
+const X14_ONLY_ICON_SETS: &[&str] = &["3Stars", "3Triangles", "5Boxes"];
+
+/// The XML of an icon set rule: the plain element, or an entry in `x14_parts`.
+fn icon_set_xml(
+    range: &str,
+    priority: u32,
+    set_name: &str,
+    show_value: bool,
+    cfvos: &[(&Cfvo, bool)],
+    x14_parts: &mut Vec<String>,
+    guid_idx: &mut usize,
+) -> String {
+    let show_val = if show_value { "" } else { r#" showValue="0""# };
+    if !X14_ONLY_ICON_SETS.contains(&set_name) {
+        let cfvos: String = cfvos
+            .iter()
+            .map(|(cfvo, is_strict)| cfvo_with_gte_xml(cfvo, *is_strict))
+            .collect();
+        return format!(
+            r#"<conditionalFormatting sqref="{range}"><cfRule type="iconSet" priority="{priority}"><iconSet iconSet="{set_name}"{show_val}>{cfvos}</iconSet></cfRule></conditionalFormatting>"#
+        );
+    }
+    let cfvos: String = cfvos
+        .iter()
+        .map(|(cfvo, is_strict)| {
+            let xml = cfvo_x14_xml(cfvo);
+            if *is_strict {
+                xml
+            } else {
+                xml.replacen("<x14:cfvo ", r#"<x14:cfvo gte="0" "#, 1)
+            }
+        })
+        .collect();
+    let guid = make_guid(*guid_idx);
+    *guid_idx += 1;
+    x14_parts.push(format!(
+        r#"<x14:conditionalFormatting xmlns:xm="http://schemas.microsoft.com/office/excel/2006/main"><x14:cfRule type="iconSet" priority="{priority}" id="{guid}"><x14:iconSet iconSet="{set_name}"{show_val}>{cfvos}</x14:iconSet></x14:cfRule><xm:sqref>{range}</xm:sqref></x14:conditionalFormatting>"#
+    ));
+    String::new()
 }
 
 fn make_guid(idx: usize) -> String {
@@ -254,11 +304,12 @@ fn build_cf_rule_xml(
         } => {
             let op = value_operator_to_str(operator);
             let sif = stop_if_true_attr(*stop_if_true);
-            let f1 = format!("<formula>{}</formula>", escape_xml(formula));
-            let f2 = formula2
-                .as_deref()
-                .map(|f| format!("<formula>{}</formula>", escape_xml(f)))
-                .unwrap_or_default();
+            let element = |f: &str| {
+                let body = f.trim().strip_prefix('=').unwrap_or(f.trim());
+                format!("<formula>{}</formula>", escape_xml(body))
+            };
+            let f1 = element(formula);
+            let f2 = formula2.as_deref().map(element).unwrap_or_default();
             format!(
                 r#"<conditionalFormatting sqref="{range}"><cfRule type="cellIs" dxfId="{dxf_id}" priority="{excel_priority}"{sif} operator="{op}">{f1}{f2}</cfRule></conditionalFormatting>"#
             )
@@ -352,8 +403,9 @@ fn build_cf_rule_xml(
                 )
             } else {
                 let type_str = text_operator_to_type(operator);
+                let operator_name = text_operator_name(operator);
                 format!(
-                    r#"<conditionalFormatting sqref="{range}"><cfRule type="{type_str}" dxfId="{dxf_id}" priority="{excel_priority}"{sif} text="{}"><formula>{}</formula></cfRule></conditionalFormatting>"#,
+                    r#"<conditionalFormatting sqref="{range}"><cfRule type="{type_str}" dxfId="{dxf_id}" priority="{excel_priority}"{sif} operator="{operator_name}" text="{}"><formula>{}</formula></cfRule></conditionalFormatting>"#,
                     escape_xml(value),
                     escape_xml(&formula),
                 )
@@ -493,14 +545,16 @@ fn build_cf_rule_xml(
             show_value,
         } => {
             let set_name = icon_set_name_from_thresholds(thresholds)?;
-            // Known named set → standard conditionalFormatting element.
-            let show_val = if !show_value { r#" showValue="0""# } else { "" };
-            let cfvos: String = thresholds
-                .iter()
-                .map(|t| cfvo_with_gte_xml(&t.cfvo, t.is_strict))
-                .collect();
-            format!(
-                r#"<conditionalFormatting sqref="{range}"><cfRule type="iconSet" priority="{excel_priority}"><iconSet iconSet="{set_name}"{show_val}>{cfvos}</iconSet></cfRule></conditionalFormatting>"#
+            let cfvos: Vec<(&Cfvo, bool)> =
+                thresholds.iter().map(|t| (&t.cfvo, t.is_strict)).collect();
+            icon_set_xml(
+                range,
+                excel_priority,
+                set_name,
+                *show_value,
+                &cfvos,
+                x14_parts,
+                databar_guid_idx,
             )
         }
         CfRule::IconRating {
@@ -510,14 +564,18 @@ fn build_cf_rule_xml(
             ..
         } => {
             let set_name = icon_rating_set_name(icon, thresholds.len())?;
-            // Known rating set → standard conditionalFormatting element.
-            let show_val = if !show_value { r#" showValue="0""# } else { "" };
-            let cfvos: String = thresholds
+            let cfvos: Vec<(&Cfvo, bool)> = thresholds
                 .iter()
-                .map(|(cfvo, is_strict)| cfvo_with_gte_xml(cfvo, *is_strict))
+                .map(|(cfvo, is_strict)| (cfvo, *is_strict))
                 .collect();
-            format!(
-                r#"<conditionalFormatting sqref="{range}"><cfRule type="iconSet" priority="{excel_priority}"><iconSet iconSet="{set_name}"{show_val}>{cfvos}</iconSet></cfRule></conditionalFormatting>"#
+            icon_set_xml(
+                range,
+                excel_priority,
+                set_name,
+                *show_value,
+                &cfvos,
+                x14_parts,
+                databar_guid_idx,
             )
         }
     };

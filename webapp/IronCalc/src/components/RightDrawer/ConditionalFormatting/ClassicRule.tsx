@@ -1,6 +1,6 @@
 import { getTokens, type IronCalcTheme } from "@ironcalc/wasm";
 import { Check, SquareMousePointer } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../Button/Button";
 import { IconButton } from "../../Button/IconButton";
@@ -8,11 +8,18 @@ import { Checkbox } from "../../Checkbox/Checkbox";
 import { Input } from "../../Input/Input";
 import { Select } from "../../Select/Select";
 import { Tooltip } from "../../Tooltip/Tooltip";
+import { selectionToValue } from "./cfRuleMapping";
 import type { RuleData } from "./EditRule";
 import FormatStylePicker, { type FormatStyle } from "./FormatStylePicker";
 import { getRuleDescription } from "./ruleDescription";
 
-const OPERATOR_TYPES_WITH_SECOND_DROPDOWN = ["cell_value", "text", "date"];
+const OPERATOR_TYPES_WITH_SECOND_DROPDOWN = [
+  "cell_value",
+  "text",
+  "date",
+  "top_bottom",
+];
+const AVERAGE_OPERATORS = ["above_average", "below_average"];
 
 interface ClassicRuleProps {
   onSave: (data: RuleData) => void;
@@ -26,6 +33,8 @@ interface ClassicRuleProps {
   onDescriptionChange?: (description: string) => void;
   resolveValue?: (val: string) => string;
   currentTheme: IronCalcTheme;
+  // This tab only makes rules of this one type
+  lockedRuleType?: string;
 }
 
 const ClassicRule = ({
@@ -40,16 +49,27 @@ const ClassicRule = ({
   onDescriptionChange,
   resolveValue,
   currentTheme,
+  lockedRuleType,
 }: ClassicRuleProps) => {
   const { t } = useTranslation();
+  // Values from a rule of another type don't carry over to this tab
+  const initialType = initialValues?.ruleType;
+  const initial =
+    (lockedRuleType && initialType === lockedRuleType) ||
+    (!lockedRuleType && initialType !== "top_bottom")
+      ? initialValues
+      : undefined;
   const [ruleType, setRuleType] = useState(
-    initialValues?.ruleType ?? "cell_value",
+    lockedRuleType ?? initial?.ruleType ?? "cell_value",
   );
   const [ruleOperator, setRuleOperator] = useState(
-    initialValues?.ruleOperator ?? "between",
+    initial?.ruleOperator ??
+      (lockedRuleType === "top_bottom" ? "top_items" : "between"),
   );
-  const [ruleValue, setRuleValue] = useState(initialValues?.ruleValue ?? "");
-  const [ruleValue2, setRuleValue2] = useState(initialValues?.ruleValue2 ?? "");
+  const [ruleValue, setRuleValue] = useState(
+    initial?.ruleValue ?? (lockedRuleType === "top_bottom" ? "10" : ""),
+  );
+  const [ruleValue2, setRuleValue2] = useState(initial?.ruleValue2 ?? "");
   const [stopIfTrue, setStopIfTrue] = useState(
     initialValues?.stopIfTrue ?? false,
   );
@@ -124,6 +144,29 @@ const ClassicRule = ({
       { value: "ends_with", label: t("conditional_formatting.op_ends_with") },
       { value: "equals", label: t("conditional_formatting.op_equals") },
     ],
+    top_bottom: [
+      { value: "top_items", label: t("conditional_formatting.op_top_items") },
+      {
+        value: "top_percent",
+        label: t("conditional_formatting.op_top_percent"),
+      },
+      {
+        value: "bottom_items",
+        label: t("conditional_formatting.op_bottom_items"),
+      },
+      {
+        value: "bottom_percent",
+        label: t("conditional_formatting.op_bottom_percent"),
+      },
+      {
+        value: "above_average",
+        label: t("conditional_formatting.op_above_average"),
+      },
+      {
+        value: "below_average",
+        label: t("conditional_formatting.op_below_average"),
+      },
+    ],
     date: [
       { value: "between", label: t("conditional_formatting.op_between") },
       {
@@ -162,7 +205,13 @@ const ClassicRule = ({
     showSecondDropdown &&
     !(
       ruleType === "date" && !["between", "not_between"].includes(ruleOperator)
-    );
+    ) &&
+    !AVERAGE_OPERATORS.includes(ruleOperator);
+  const isTopBottom = ruleType === "top_bottom";
+  const rankError =
+    isTopBottom &&
+    showValueInput &&
+    !(Number.isInteger(Number(ruleValue)) && Number(ruleValue) > 0);
   const showFormulaInput = ruleType === "formula";
 
   const formulaError = (() => {
@@ -179,15 +228,6 @@ const ClassicRule = ({
     }
     return null;
   })();
-
-  const isFirstRender = useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    setRuleOperator(currentOperatorOptions[0]?.value ?? "");
-  }, [currentOperatorOptions[0]?.value]);
 
   useEffect(() => {
     onDescriptionChange?.(
@@ -250,12 +290,19 @@ const ClassicRule = ({
               {t("conditional_formatting.highlight_cells_if")}
             </span>
             <div className="ic-edit-rule-dropdowns-row">
-              <Select
-                value={ruleType}
-                options={ruleTypeOptions}
-                onChange={setRuleType}
-                hideCheck
-              />
+              {lockedRuleType ? null : (
+                <Select
+                  value={ruleType}
+                  options={ruleTypeOptions}
+                  onChange={(next) => {
+                    setRuleType(next);
+                    setRuleOperator(
+                      operatorOptionsByType[next]?.[0]?.value ?? "",
+                    );
+                  }}
+                  hideCheck
+                />
+              )}
               {showSecondDropdown && (
                 <Select
                   value={ruleOperator}
@@ -310,7 +357,9 @@ const ClassicRule = ({
                         variant="secondary"
                         icon={<SquareMousePointer />}
                         aria-label={t("conditional_formatting.use_selection")}
-                        onClick={() => setRuleValue(getSelectedArea())}
+                        onClick={() =>
+                          setRuleValue(selectionToValue(getSelectedArea()))
+                        }
                         className="ic-edit-rule-range-button"
                       />
                     </Tooltip>
@@ -347,7 +396,8 @@ const ClassicRule = ({
             !applyTo.trim() ||
             (showFormulaInput && (!ruleValue.trim() || !!formulaError)) ||
             (showValueInput &&
-              (!ruleValue.trim() || (showTwoInputs && !ruleValue2.trim())))
+              (!ruleValue.trim() || (showTwoInputs && !ruleValue2.trim()))) ||
+            rankError
           }
           onClick={() =>
             onSave({

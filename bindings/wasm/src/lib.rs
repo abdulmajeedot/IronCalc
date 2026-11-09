@@ -132,6 +132,15 @@ fn from_js<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<T, JsError>
     serde_wasm_bindgen::from_value(value).map_err(|e| to_js_error(e.to_string()))
 }
 
+/// The thresholds of one of Excel's icon sets, lowest first.
+#[wasm_bindgen(
+    js_name = "iconSetThresholds",
+    unchecked_return_type = "IconThreshold[] | undefined"
+)]
+pub fn icon_set_thresholds(name: &str) -> Result<JsValue, JsError> {
+    to_js(&ironcalc_base::cf_types::icon_set_thresholds(name))
+}
+
 #[wasm_bindgen]
 pub struct Model {
     model: BaseModel<'static>,
@@ -1899,6 +1908,24 @@ impl Model {
             .get_dxf_for_conditional_formatting(sheet, index)
             .map_err(|e| to_js_error(e.to_string()))?;
         serde_wasm_bindgen::to_value(&dxf).map_err(|e| to_js_error(e.to_string()))
+    }
+
+    /// Removes rules from an area, or from the whole sheet with `null`.
+    #[wasm_bindgen(js_name = "clearConditionalFormatting")]
+    pub fn clear_conditional_formatting(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea | null")] area: JsValue,
+    ) -> Result<(), JsError> {
+        self.model
+            .clear_conditional_formatting(sheet, from_js(area)?)
+            .map_err(to_js_error)
+    }
+
+    /// The formula for what was typed as a "cell value" rule's value.
+    #[wasm_bindgen(js_name = "cfValueToFormula")]
+    pub fn cf_value_to_formula(&self, value: &str) -> String {
+        self.model.get_model().cf_value_to_formula(value)
     }
 
     #[wasm_bindgen(js_name = "deleteConditionalFormatting")]

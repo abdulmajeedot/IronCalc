@@ -39,6 +39,7 @@ interface EditRuleProps {
   getSelectedArea: () => string;
   resolveValue?: (val: string) => string;
   currentTheme: IronCalcTheme;
+  saveFailed?: boolean;
 }
 
 const DEFAULT_FORMAT_STYLE: FormatStyle = {
@@ -50,7 +51,13 @@ const DEFAULT_FORMAT_STYLE: FormatStyle = {
   fillColor: "#FBE7E8",
 };
 
-type TabId = "classic" | "color_scale" | "data_bars" | "icon_sets";
+type TabId =
+  | "classic"
+  | "top_bottom"
+  | "data_bars"
+  | "color_scale"
+  | "icon_sets"
+  | "formula";
 
 const EditRule = ({
   onSave,
@@ -59,6 +66,7 @@ const EditRule = ({
   getSelectedArea,
   resolveValue,
   currentTheme,
+  saveFailed,
 }: EditRuleProps) => {
   const { t } = useTranslation();
   const initialTab: TabId =
@@ -68,7 +76,11 @@ const EditRule = ({
         ? "data_bars"
         : initialValues?.ruleType === "icon_sets"
           ? "icon_sets"
-          : "classic";
+          : initialValues?.ruleType === "top_bottom"
+            ? "top_bottom"
+            : initialValues?.ruleType === "formula"
+              ? "formula"
+              : "classic";
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [applyTo, setApplyTo] = useState(initialValues?.applyTo ?? "");
   const [formatStyle, setFormatStyle] = useState<FormatStyle>(
@@ -127,9 +139,11 @@ const EditRule = ({
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "classic", label: t("conditional_formatting.tab_classic") },
-    { id: "color_scale", label: t("conditional_formatting.tab_color_scale") },
+    { id: "top_bottom", label: t("conditional_formatting.tab_top_bottom") },
     { id: "data_bars", label: t("conditional_formatting.tab_data_bars") },
+    { id: "color_scale", label: t("conditional_formatting.tab_color_scale") },
     { id: "icon_sets", label: t("conditional_formatting.tab_icon_sets") },
+    { id: "formula", label: t("conditional_formatting.tab_formula") },
   ];
 
   return (
@@ -163,7 +177,8 @@ const EditRule = ({
           )}
         </div>
         <span className="ic-edit-rule-header-box-text">
-          {activeTab === "classic" && classicDescription
+          {["classic", "top_bottom", "formula"].includes(activeTab) &&
+          classicDescription
             ? classicDescription
             : tabs.find((tab) => tab.id === activeTab)?.label}
         </span>
@@ -181,8 +196,15 @@ const EditRule = ({
           </Button>
         ))}
       </div>
-      {activeTab === "classic" && (
+      {saveFailed && (
+        <div className="ic-edit-rule-error" role="alert">
+          {t("conditional_formatting.save_error")}
+        </div>
+      )}
+      {["classic", "top_bottom", "formula"].includes(activeTab) && (
         <ClassicRule
+          key={activeTab}
+          lockedRuleType={activeTab === "classic" ? undefined : activeTab}
           onSave={onSave}
           onCancel={onCancel}
           initialValues={initialValues}

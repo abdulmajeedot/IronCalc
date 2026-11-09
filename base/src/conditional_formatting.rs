@@ -1,18 +1,23 @@
 use std::collections::HashMap;
 
+use crate::constants::{LAST_COLUMN, LAST_ROW};
+use crate::data_validation::sqref_of;
+use crate::expressions::parser::stringify::to_english_string;
+use crate::expressions::parser::Node;
 use crate::expressions::utils::parse_reference_a1;
 use crate::formatter::dates::{date_to_serial_number, from_excel_date};
+use crate::functions::util::compare_values;
 use crate::number_format::parse_finite_number;
 use crate::{
     calc_result::CalcResult,
     cell::CellValue,
     cf_types::{
-        CfCellResult, CfDataBar, CfIcon, CfRating, CfRule, CfRuleInput, Cfvo, ColorScaleThreshold,
-        ConditionalFormatting, ConditionalFormattingView, ExtendedStyle, Icon, IconThreshold,
-        PeriodType, TextOperator, ValueOperator,
+        CfBeyondData, CfCellResult, CfDataBar, CfIcon, CfRating, CfRule, CfRuleInput, Cfvo,
+        ColorScaleThreshold, ConditionalFormatting, ConditionalFormattingView, ExtendedStyle, Icon,
+        IconThreshold, PeriodType, TextOperator, ValueOperator,
     },
     expressions::types::{CellReferenceIndex, CellReferenceRC},
-    types::{Color, Dxf},
+    types::{CellType, Color, Dxf},
     Model,
 };
 
@@ -22,6 +27,73 @@ use chrono::{Datelike, Duration, Months, NaiveDate};
 // Free helper functions for CF evaluation
 // ---------------------------------------------------------------------------
 
+/// A rule covering more cells than this only looks at the sheet's data.
+const CF_LARGE_AREA: i64 = 100_000;
+
+fn range_area((r1, c1, r2, c2): (i32, i32, i32, i32)) -> i64 {
+    i64::from(r2 - r1 + 1) * i64::from(c2 - c1 + 1)
+}
+
+/// Whether a value passes a "cell value" rule, compared as a formula would.
+/// A value that is an error or not a single value matches nothing.
+fn cell_is_matches(
+    operator: &ValueOperator,
+    value: &CalcResult,
+    first: &CalcResult,
+    second: &CalcResult,
+) -> bool {
+    let single = |v: &CalcResult| {
+        matches!(
+            v,
+            CalcResult::Number(_)
+                | CalcResult::String(_)
+                | CalcResult::Boolean(_)
+                | CalcResult::EmptyCell
+        )
+    };
+    if !single(first) || !single(second) {
+        return false;
+    }
+    let (low, high) = if compare_values(first, second) > 0 {
+        (second, first)
+    } else {
+        (first, second)
+    };
+    match operator {
+        ValueOperator::Equal => compare_values(value, first) == 0,
+        ValueOperator::NotEqual => compare_values(value, first) != 0,
+        ValueOperator::GreaterThan => compare_values(value, first) > 0,
+        ValueOperator::GreaterThanOrEqual => compare_values(value, first) >= 0,
+        ValueOperator::LessThan => compare_values(value, first) < 0,
+        ValueOperator::LessThanOrEqual => compare_values(value, first) <= 0,
+        ValueOperator::Between => {
+            compare_values(value, low) >= 0 && compare_values(value, high) <= 0
+        }
+        ValueOperator::NotBetween => {
+            compare_values(value, low) < 0 || compare_values(value, high) > 0
+        }
+    }
+}
+
+/// `range` with commas, `$` and whole rows or columns written the way a
+/// saved file needs them.
+pub(crate) fn canonical_sqref(range: &str) -> Result<String, String> {
+    let error = || format!("Invalid conditional formatting range: '{range}'");
+    let parts: Vec<String> = range
+        .replace(',', " ")
+        .split_whitespace()
+        .map(str::to_string)
+        .collect();
+    let ranges = parts
+        .iter()
+        .map(|part| parse_range_part(part).ok_or_else(error))
+        .collect::<Result<Vec<_>, _>>()?;
+    if ranges.is_empty() {
+        return Err(error());
+    }
+    Ok(sqref_of(&ranges))
+}
+
 /// Parses a space-separated sqref like "A1:C3 E5" into a list of (row1,col1,row2,col2) tuples.
 pub(crate) fn parse_sqref(sqref: &str) -> Vec<(i32, i32, i32, i32)> {
     sqref
@@ -30,8 +102,25 @@ pub(crate) fn parse_sqref(sqref: &str) -> Vec<(i32, i32, i32, i32)> {
         .collect()
 }
 
+fn whole_line_bounds(first: &str, second: &str) -> Option<(i32, i32, i32, i32)> {
+    let is_letters = |s: &str| !s.is_empty() && s.chars().all(|c| c.is_ascii_alphabetic());
+    if is_letters(first) && is_letters(second) {
+        let a = parse_reference_a1(&format!("{first}1"))?.column;
+        let b = parse_reference_a1(&format!("{second}1"))?.column;
+        return Some((1, a.min(b), LAST_ROW, a.max(b)));
+    }
+    let row = |s: &str| s.parse::<i32>().ok().filter(|r| (1..=LAST_ROW).contains(r));
+    let (a, b) = (row(first)?, row(second)?);
+    Some((a.min(b), 1, a.max(b), LAST_COLUMN))
+}
+
 fn parse_range_part(s: &str) -> Option<(i32, i32, i32, i32)> {
-    let upper = s.to_uppercase();
+    let upper = s.to_uppercase().replace('$', "");
+    if let Some((first, second)) = upper.split_once(':') {
+        if let Some(bounds) = whole_line_bounds(first, second) {
+            return Some(bounds);
+        }
+    }
     let parts: Vec<&str> = upper.splitn(2, ':').collect();
     match parts.len() {
         1 => {
@@ -138,6 +227,7 @@ impl<'a> Model<'a> {
     /// `cf_cache` and consumed by `get_extended_style_for_cell`.
     pub fn evaluate_conditional_formatting(&mut self) {
         self.cf_cache.clear();
+        self.cf_beyond_data.clear();
         let sheet_count = self.workbook.worksheets.len();
         for sheet_idx in 0..sheet_count {
             let mut cfs = self.workbook.worksheets[sheet_idx]
@@ -587,6 +677,77 @@ impl<'a> Model<'a> {
         }
     }
 
+    /// The comparison value of a rule, parsed from the top left of its cells.
+    /// It is worked out once unless it changes from cell to cell.
+    fn cf_threshold(
+        &mut self,
+        formula: &str,
+        sheet: u32,
+        (row, column): (i32, i32),
+    ) -> Option<(Node, Option<CalcResult>)> {
+        let body = formula.trim().strip_prefix('=').unwrap_or(formula.trim());
+        if body.is_empty() {
+            return None;
+        }
+        let name = self.workbook.worksheets.get(sheet as usize)?.get_name();
+        let at = |row, column| CellReferenceRC {
+            sheet: name.clone(),
+            row,
+            column,
+        };
+        let node = self.parse_internal_formula(body, &at(row, column));
+        let upper = body.to_uppercase();
+        let moves = to_english_string(&node, &at(row, column))
+            != to_english_string(&node, &at(row + 1, column + 1))
+            || upper.contains("ROW(")
+            || upper.contains("COLUMN(");
+        let fixed = (!moves).then(|| {
+            self.evaluate_node_in_context(&node, CellReferenceIndex { sheet, row, column })
+        });
+        Some((node, fixed))
+    }
+
+    fn cf_threshold_at(
+        &mut self,
+        (node, fixed): &(Node, Option<CalcResult>),
+        cell: CellReferenceIndex,
+    ) -> CalcResult {
+        match fixed {
+            Some(value) => value.clone(),
+            None => self.evaluate_node_in_context(node, cell),
+        }
+    }
+
+    /// A cell as a formula would see it, or `None` for an error.
+    fn cf_cell_result(&self, sheet: u32, row: i32, column: i32) -> Option<CalcResult> {
+        let cell = self.workbook.worksheet(sheet).ok()?.cell(row, column);
+        if cell.is_some_and(|c| c.get_type() == CellType::ErrorValue) {
+            return None;
+        }
+        Some(
+            match self.get_cell_value_by_index(sheet, row, column).ok()? {
+                CellValue::Number(n) => CalcResult::Number(n),
+                CellValue::String(s) => CalcResult::String(s),
+                CellValue::Boolean(b) => CalcResult::Boolean(b),
+                CellValue::None => CalcResult::EmptyCell,
+            },
+        )
+    }
+
+    /// The last row and column holding a cell, 0 on an empty sheet.
+    fn cf_used_extent(&self, sheet: u32) -> (i32, i32) {
+        let Ok(worksheet) = self.workbook.worksheet(sheet) else {
+            return (0, 0);
+        };
+        let mut extent = (0, 0);
+        for row in worksheet.sheet_data.rows() {
+            let last = worksheet.sheet_data.columns_in_row(row);
+            extent.0 = extent.0.max(row);
+            extent.1 = extent.1.max(last.into_iter().max().unwrap_or(0));
+        }
+        extent
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn apply_cf_cell_is(
         &mut self,
@@ -598,46 +759,150 @@ impl<'a> Model<'a> {
         stop_if_true: bool,
         ranges: &[(i32, i32, i32, i32)],
     ) {
-        let threshold = match self.evaluate_formula(formula, sheet) {
-            Some(v) => v,
-            None => return,
+        let Some(anchor) = ranges
+            .iter()
+            .map(|&(r1, c1, _, _)| (r1, c1))
+            .reduce(|(r, c), (r1, c1)| (r.min(r1), c.min(c1)))
+        else {
+            return;
         };
-        let threshold2 = formula2.and_then(|f| self.evaluate_formula(f, sheet));
+        let Some(first) = self.cf_threshold(formula, sheet, anchor) else {
+            return;
+        };
+        let second = formula2.and_then(|f| self.cf_threshold(f, sheet, anchor));
+        let large = ranges.iter().map(|&r| range_area(r)).sum::<i64>() > CF_LARGE_AREA;
+        let (last_row, last_column) = if large {
+            self.cf_used_extent(sheet)
+        } else {
+            (LAST_ROW, LAST_COLUMN)
+        };
 
         for &(r1, c1, r2, c2) in ranges {
-            for row in r1..=r2 {
-                for col in c1..=c2 {
-                    if let Ok(CellValue::Number(v)) = self.get_cell_value_by_index(sheet, row, col)
-                    {
-                        let matches = match operator {
-                            ValueOperator::Equal => (v - threshold).abs() < f64::EPSILON,
-                            ValueOperator::GreaterThan => v > threshold,
-                            ValueOperator::GreaterThanOrEqual => v >= threshold,
-                            ValueOperator::LessThan => v < threshold,
-                            ValueOperator::LessThanOrEqual => v <= threshold,
-                            ValueOperator::NotEqual => (v - threshold).abs() >= f64::EPSILON,
-                            ValueOperator::Between => {
-                                let t2 = threshold2.unwrap_or(threshold);
-                                v >= threshold.min(t2) && v <= threshold.max(t2)
-                            }
-                            ValueOperator::NotBetween => {
-                                let t2 = threshold2.unwrap_or(threshold);
-                                v < threshold.min(t2) || v > threshold.max(t2)
-                            }
-                        };
-                        if matches {
-                            self.update_cf_cache(
-                                sheet,
-                                row,
-                                col,
-                                CfCellResult::Dxf(dxf_id),
-                                stop_if_true,
-                            );
-                        }
+            for row in r1..=r2.min(last_row) {
+                for column in c1..=c2.min(last_column) {
+                    let Some(value) = self.cf_cell_result(sheet, row, column) else {
+                        continue;
+                    };
+                    let cell = CellReferenceIndex { sheet, row, column };
+                    let low = self.cf_threshold_at(&first, cell);
+                    let high = match &second {
+                        Some(second) => self.cf_threshold_at(second, cell),
+                        None => low.clone(),
+                    };
+                    if cell_is_matches(operator, &value, &low, &high) {
+                        self.update_cf_cache(
+                            sheet,
+                            row,
+                            column,
+                            CfCellResult::Dxf(dxf_id),
+                            stop_if_true,
+                        );
                     }
                 }
             }
         }
+
+        // Past the data every cell is empty and answers the same way, so one
+        // answer does for all of them.
+        let beyond = ranges.iter().find_map(|&(r1, c1, r2, c2)| {
+            if r2 > last_row {
+                Some((r1.max(last_row + 1), c1))
+            } else if c2 > last_column {
+                Some((r1, c1.max(last_column + 1)))
+            } else {
+                None
+            }
+        });
+        if let Some((row, column)) = beyond {
+            let cell = CellReferenceIndex { sheet, row, column };
+            let low = self.cf_threshold_at(&first, cell);
+            let high = match &second {
+                Some(second) => self.cf_threshold_at(second, cell),
+                None => low.clone(),
+            };
+            if cell_is_matches(operator, &CalcResult::EmptyCell, &low, &high) {
+                self.cf_beyond_data
+                    .entry(sheet)
+                    .or_default()
+                    .push(CfBeyondData {
+                        ranges: ranges.to_vec(),
+                        last_row,
+                        last_column,
+                        dxf_id,
+                        stop_if_true,
+                    });
+            }
+        }
+    }
+
+    /// The rules that format this cell as one of the empty cells past the
+    /// data, lowest priority first.
+    fn cf_beyond_data_at(&self, sheet: u32, row: i32, column: i32) -> Vec<&CfBeyondData> {
+        let Some(rules) = self.cf_beyond_data.get(&sheet) else {
+            return Vec::new();
+        };
+        rules
+            .iter()
+            .filter(|rule| {
+                (row > rule.last_row || column > rule.last_column)
+                    && rule.ranges.iter().any(|&(r1, c1, r2, c2)| {
+                        (r1..=r2).contains(&row) && (c1..=c2).contains(&column)
+                    })
+            })
+            .collect()
+    }
+
+    /// Whether conditional formatting changes how this cell looks.
+    pub(crate) fn has_cf_result(&self, sheet: u32, row: i32, column: i32) -> bool {
+        self.cf_cache.contains_key(&(sheet, row, column))
+            || !self.cf_beyond_data_at(sheet, row, column).is_empty()
+    }
+
+    /// The cells of `ranges` that hold something.
+    fn cf_filled_cells(&self, sheet: u32, ranges: &[(i32, i32, i32, i32)]) -> Vec<(i32, i32)> {
+        let mut cells = Vec::new();
+        let Ok(worksheet) = self.workbook.worksheet(sheet) else {
+            return cells;
+        };
+        for &(r1, c1, r2, c2) in ranges {
+            if range_area((r1, c1, r2, c2)) > CF_LARGE_AREA {
+                cells.extend(worksheet.sheet_data.cells().filter_map(|(row, column, _)| {
+                    ((r1..=r2).contains(&row) && (c1..=c2).contains(&column))
+                        .then_some((row, column))
+                }));
+                continue;
+            }
+            for row in r1..=r2 {
+                for column in c1..=c2 {
+                    if worksheet.cell(row, column).is_some() {
+                        cells.push((row, column));
+                    }
+                }
+            }
+        }
+        cells
+    }
+
+    /// The formula for what was typed as the value of a "cell value" rule.
+    /// As in a cell, `=` starts a formula. Otherwise a number, percentage,
+    /// currency, date or time is that number, and anything else is text.
+    pub fn cf_value_to_formula(&self, value: &str) -> String {
+        let value = value.trim();
+        if value.starts_with('=') {
+            return value.to_string();
+        }
+        let booleans = &self.language.booleans;
+        if value.eq_ignore_ascii_case(&booleans.r#true)
+            || value.eq_ignore_ascii_case(&booleans.r#false)
+        {
+            return value.to_string();
+        }
+        if let Some(number) = self.cast_number(value) {
+            return number
+                .to_string()
+                .replace('.', &self.locale.numbers.symbols.decimal);
+        }
+        format!("\"{}\"", value.replace('"', "\"\""))
     }
 
     fn apply_cf_average(
@@ -1028,35 +1293,18 @@ impl<'a> Model<'a> {
         ranges: &[(i32, i32, i32, i32)],
     ) {
         let mut counts: HashMap<String, u32> = HashMap::new();
-        for &(r1, c1, r2, c2) in ranges {
-            for row in r1..=r2 {
-                for col in c1..=c2 {
-                    if let Ok(v) = self.get_cell_value_by_index(sheet, row, col) {
-                        let key = cell_value_key(&v);
-                        if let Some(k) = key {
-                            *counts.entry(k).or_insert(0) += 1;
-                        }
-                    }
+        let mut keyed = Vec::new();
+        for (row, col) in self.cf_filled_cells(sheet, ranges) {
+            if let Ok(v) = self.get_cell_value_by_index(sheet, row, col) {
+                if let Some(k) = cell_value_key(&v) {
+                    *counts.entry(k.clone()).or_insert(0) += 1;
+                    keyed.push((row, col, k));
                 }
             }
         }
-        for &(r1, c1, r2, c2) in ranges {
-            for row in r1..=r2 {
-                for col in c1..=c2 {
-                    if let Ok(v) = self.get_cell_value_by_index(sheet, row, col) {
-                        if let Some(k) = cell_value_key(&v) {
-                            if counts.get(&k).copied().unwrap_or(0) > 1 {
-                                self.update_cf_cache(
-                                    sheet,
-                                    row,
-                                    col,
-                                    CfCellResult::Dxf(dxf_id),
-                                    stop_if_true,
-                                );
-                            }
-                        }
-                    }
-                }
+        for (row, col, k) in keyed {
+            if counts.get(&k).copied().unwrap_or(0) > 1 {
+                self.update_cf_cache(sheet, row, col, CfCellResult::Dxf(dxf_id), stop_if_true);
             }
         }
     }
@@ -1134,17 +1382,25 @@ impl<'a> Model<'a> {
     ) -> Result<ExtendedStyle, String> {
         let mut base = self.get_style_for_cell(sheet, row, column)?;
         self.apply_table_style(sheet, row, column, &mut base);
-        let extended = match self.cf_cache.get(&(sheet, row, column)) {
-            Some(c) => c,
-            None => {
-                return Ok(ExtendedStyle {
-                    style: base,
-                    icon: None,
-                    data_bar: None,
-                    rating: None,
-                })
+        let mut extended = self
+            .cf_cache
+            .get(&(sheet, row, column))
+            .cloned()
+            .unwrap_or_default();
+        for rule in self.cf_beyond_data_at(sheet, row, column) {
+            if rule.stop_if_true {
+                extended.clear();
             }
-        };
+            extended.push(CfCellResult::Dxf(rule.dxf_id));
+        }
+        if extended.is_empty() {
+            return Ok(ExtendedStyle {
+                style: base,
+                icon: None,
+                data_bar: None,
+                rating: None,
+            });
+        }
         let mut style = base;
         let mut icon = None;
         let mut data_bar = None;
@@ -1153,7 +1409,7 @@ impl<'a> Model<'a> {
         // order produced by the evaluator. Dxf results accumulate as we iterate; for exclusive
         // types (ColorScale, DataBar, Icon, Rating), the last assignment in this evaluated
         // result order wins.
-        for cf_result in extended {
+        for cf_result in &extended {
             match cf_result {
                 CfCellResult::Dxf(dxf_id) => {
                     if let Some(dxf) = self.workbook.styles.dxfs.get(*dxf_id as usize) {

@@ -243,7 +243,7 @@ pub(crate) fn subtract_range(
 }
 
 /// A range split where a block of cells moved away from under it.
-fn ranges_after_block(
+pub(crate) fn ranges_after_block(
     range: (i32, i32, i32, i32),
     data: &DisplaceData,
 ) -> Vec<(i32, i32, i32, i32)> {

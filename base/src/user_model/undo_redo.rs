@@ -581,6 +581,17 @@ impl<'a> UserModel<'a> {
                     self.model
                         .update_named_style(new_name, name, old_style, *old_includes)?;
                 }
+                Diff::SetConditionalFormats {
+                    sheet,
+                    old_value,
+                    new_value: _,
+                } => {
+                    self.model
+                        .workbook
+                        .worksheet_mut(*sheet)?
+                        .conditional_formatting = old_value.clone();
+                    needs_evaluation = true;
+                }
                 Diff::AddConditionalFormatting {
                     sheet, priority, ..
                 } => {
@@ -1097,6 +1108,17 @@ impl<'a> UserModel<'a> {
                 } => {
                     self.model
                         .update_named_style(name, new_name, new_style, *new_includes)?;
+                }
+                Diff::SetConditionalFormats {
+                    sheet,
+                    old_value: _,
+                    new_value,
+                } => {
+                    self.model
+                        .workbook
+                        .worksheet_mut(*sheet)?
+                        .conditional_formatting = new_value.clone();
+                    needs_evaluation = true;
                 }
                 Diff::AddConditionalFormatting {
                     sheet,

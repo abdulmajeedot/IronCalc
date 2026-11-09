@@ -274,6 +274,11 @@ pub(crate) enum Diff {
         new_includes: StyleIncludes,
     },
     // Conditional formatting diffs
+    SetConditionalFormats {
+        sheet: u32,
+        old_value: Vec<crate::cf_types::ConditionalFormatting>,
+        new_value: Vec<crate::cf_types::ConditionalFormatting>,
+    },
     AddConditionalFormatting {
         sheet: u32,
         range: String,
