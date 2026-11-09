@@ -1,5 +1,6 @@
 //! Creating and editing PivotTables with undo. See [`crate::pivot`].
 
+use crate::user_model::protection::Permission;
 use std::collections::{BTreeMap, BTreeSet};
 
 use bitcode::{Decode, Encode};
@@ -214,6 +215,11 @@ impl UserModel<'_> {
         new_sheet_name: Option<&str>,
         overwrite: bool,
     ) -> Result<u32, String> {
+        if new_sheet_name.is_none() {
+            if let Some(sheet) = self.model.pivot_sheet_index(pivot.sheet_id) {
+                self.guard(sheet, Permission::Never)?;
+            }
+        }
         let mut diffs = Vec::new();
         // Like Excel, a new sheet goes just before the current one
         let index = self.view.sheet;
@@ -245,6 +251,7 @@ impl UserModel<'_> {
         pivot: PivotTable,
         overwrite: bool,
     ) -> Result<(), String> {
+        self.guard_pivot(index, Permission::PivotTables)?;
         let current = self.pivot_at(index)?;
         if current.read_only {
             return Err("This PivotTable uses features that cannot be edited here".to_string());
@@ -260,6 +267,7 @@ impl UserModel<'_> {
 
     /// Recomputes a pivot from the current values of its source.
     pub fn refresh_pivot_table(&mut self, index: u32) -> Result<(), String> {
+        self.guard_pivot(index, Permission::PivotTables)?;
         let pivot = self.pivot_at(index)?;
         if pivot.read_only {
             return Err("This PivotTable uses features that cannot be edited here".to_string());
@@ -270,6 +278,7 @@ impl UserModel<'_> {
 
     /// Removes a pivot and clears its cells.
     pub fn delete_pivot_table(&mut self, index: u32) -> Result<(), String> {
+        self.guard_pivot(index, Permission::Never)?;
         let pivot = self.pivot_at(index)?;
         let old_pivots = self.model.workbook.pivot_tables.clone();
         let mut new_pivots = old_pivots.clone();

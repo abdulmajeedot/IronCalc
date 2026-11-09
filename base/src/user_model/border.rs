@@ -1,3 +1,4 @@
+use crate::user_model::protection::Permission;
 use crate::{
     constants::{LAST_COLUMN, LAST_ROW},
     expressions::types::Area,
@@ -343,6 +344,7 @@ impl<'a> UserModel<'a> {
         range: &Area,
         border_area: &BorderArea,
     ) -> Result<(), String> {
+        self.guard(range.sheet, Permission::FormatCells)?;
         let sheet = range.sheet;
         let first_row = range.row;
         let first_column = range.column;

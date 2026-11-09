@@ -15,6 +15,7 @@ mod links;
 mod merged_cells;
 mod named_cell_styles;
 mod pivot;
+pub(crate) mod protection;
 mod sequence_detector;
 mod table;
 mod ui;

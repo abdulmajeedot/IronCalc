@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Lock } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ColorPicker from "../ColorPicker/ColorPicker";
@@ -8,6 +8,7 @@ import type { WorkbookState } from "../workbookState";
 import SheetDeleteModal from "./SheetDeleteModal";
 import { SheetTabMenu } from "./SheetTabMenu";
 import "./sheet-tab.css";
+import "../Protection/protection.css";
 import type { Color, IronCalcTheme, Model } from "@ironcalc/wasm";
 
 interface SheetTabProps {
@@ -22,6 +23,8 @@ interface SheetTabProps {
   onDeleted: () => void;
   onDuplicateSheet: () => void;
   onHideSheet: () => void;
+  isProtected: boolean;
+  onToggleProtection: () => void;
   workbookState: WorkbookState;
   currentTheme: IronCalcTheme;
   onMoveSheet: (fromIndex: number, toIndex: number) => void;
@@ -213,6 +216,12 @@ function SheetTab(props: SheetTabProps) {
           </>
         ) : (
           <>
+            {props.isProtected ? (
+              <Lock
+                className="ic-sheet-tab-lock"
+                aria-label={t("protection.sheet_is_protected")}
+              />
+            ) : null}
             <div className="ic-sheet-tab-name">{name}</div>
             {props.canEdit && (
               <button
@@ -242,6 +251,8 @@ function SheetTab(props: SheetTabProps) {
           onOpenColorPicker={() => setColorPickerOpen(true)}
           onDuplicateSheet={props.onDuplicateSheet}
           onHideSheet={props.onHideSheet}
+          isProtected={props.isProtected}
+          onToggleProtection={props.onToggleProtection}
           onDeleteSheet={() => setDeleteDialogOpen(true)}
           onMoveLeft={() => {
             const selectedIndex = model.getSelectedSheet();

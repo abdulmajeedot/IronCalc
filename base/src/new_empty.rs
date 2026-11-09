@@ -716,6 +716,7 @@ impl<'a> Model<'a> {
             saved_view: Default::default(),
             data_validations: vec![],
             sheet_filters: vec![],
+            sheet_protections: vec![],
             slicers: vec![],
         };
         let parsed_formulas = Vec::new();

@@ -352,6 +352,20 @@ impl<'a> UserModel<'a> {
     /// Fills the cells from `source_area` until `to_row`.
     /// This simulates the user clicking on the cell outline handle and dragging it downwards (or upwards)
     pub fn auto_fill_rows(&mut self, source_area: &Area, to_row: i32) -> Result<(), String> {
+        let (first, last) = if to_row < source_area.row {
+            (to_row, source_area.row - 1)
+        } else {
+            (source_area.row + source_area.height, to_row)
+        };
+        self.guard_cells(
+            source_area.sheet,
+            (
+                first,
+                source_area.column,
+                last,
+                source_area.column + source_area.width - 1,
+            ),
+        )?;
         let mut diff_list = Vec::new();
         let sheet = source_area.sheet;
         let row1 = source_area.row;
@@ -537,6 +551,20 @@ impl<'a> UserModel<'a> {
     /// Fills the cells from `source_area` until `to_column`.
     /// This simulates the user clicking on the cell outline handle and dragging it to the right (or to the left)
     pub fn auto_fill_columns(&mut self, source_area: &Area, to_column: i32) -> Result<(), String> {
+        let (first, last) = if to_column < source_area.column {
+            (to_column, source_area.column - 1)
+        } else {
+            (source_area.column + source_area.width, to_column)
+        };
+        self.guard_cells(
+            source_area.sheet,
+            (
+                source_area.row,
+                first,
+                source_area.row + source_area.height - 1,
+                last,
+            ),
+        )?;
         let mut diff_list = Vec::new();
         let sheet = source_area.sheet;
         let row1 = source_area.row;

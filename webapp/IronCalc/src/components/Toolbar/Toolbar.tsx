@@ -35,6 +35,7 @@ import {
   Link2,
   ListChecks,
   ListFilter,
+  Lock,
   Minus,
   PaintBucket,
   PaintRoller,
@@ -73,6 +74,10 @@ import {
 import { Menu } from "../Menu/Menu";
 import { MenuDivider } from "../Menu/MenuDivider";
 import { MenuItem } from "../Menu/MenuItem";
+import ProtectionMenu, {
+  type ProtectionAction,
+  type ProtectionState,
+} from "../Protection/ProtectionMenu";
 import ConditionalFormattingMenu, {
   type CfMenuAction,
 } from "../RightDrawer/ConditionalFormatting/ConditionalFormattingMenu";
@@ -132,6 +137,8 @@ type ToolbarProperties = {
   onToggleShowGridLines: (show: boolean) => void;
   formatOptions: FmtSettings;
   onConditionalFormattingAction: (action: CfMenuAction) => void;
+  protection: ProtectionState;
+  onProtectionAction: (action: ProtectionAction) => void;
   isConditionalFormattingOpen: boolean;
   onOpenPivotTable: () => void;
   isPivotTableOpen: boolean;
@@ -158,6 +165,10 @@ type ToolbarProperties = {
 
 function Toolbar(properties: ToolbarProperties) {
   const [cfMenuAnchor, setCfMenuAnchor] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [protectionMenuAnchor, setProtectionMenuAnchor] = useState<{
     x: number;
     y: number;
   } | null>(null);
@@ -608,6 +619,27 @@ function Toolbar(properties: ToolbarProperties) {
               disabled={!canEdit}
             />
           </Tooltip>
+          <Tooltip title={t("protection.menu_tooltip")}>
+            <IconButton
+              icon={<Lock />}
+              aria-label={t("protection.menu_tooltip")}
+              pressed={properties.protection.isProtected}
+              onClick={(event) => {
+                const { left, bottom } =
+                  event.currentTarget.getBoundingClientRect();
+                setProtectionMenuAnchor({ x: left, y: bottom + 2 });
+              }}
+              disabled={!canEdit}
+            />
+          </Tooltip>
+          {protectionMenuAnchor ? (
+            <ProtectionMenu
+              anchor={protectionMenuAnchor}
+              state={properties.protection}
+              onClose={() => setProtectionMenuAnchor(null)}
+              onAction={properties.onProtectionAction}
+            />
+          ) : null}
           <ThemeMenu
             themes={properties.themes}
             currentTheme={properties.currentTheme}

@@ -746,6 +746,7 @@ impl<'a> Model<'a> {
     fn displace_cf_ranges(&mut self, sheet: u32, displace_data: &DisplaceData) {
         self.displace_comments(sheet, displace_data);
         self.displace_data_validations(sheet, displace_data);
+        self.displace_sheet_protection(sheet, displace_data);
         self.displace_sheet_filters(sheet, displace_data);
         match *displace_data {
             DisplaceData::Row { row, delta, .. } => {

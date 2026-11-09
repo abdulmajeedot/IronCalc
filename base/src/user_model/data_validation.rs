@@ -12,6 +12,7 @@ use crate::expressions::types::CellReferenceRC;
 use crate::formatter::format::{format_number, parse_formatted_number};
 use crate::pivot::PivotArea;
 use crate::types::Cell;
+use crate::user_model::protection::Permission;
 
 use serde::{Deserialize, Serialize};
 
@@ -184,6 +185,7 @@ impl UserModel<'_> {
         area: PivotArea,
         mut settings: ValidationSettings,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let sheet_id = self.model.workbook.worksheet(sheet)?.sheet_id;
         let hole = (
             area.first_row,

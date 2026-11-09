@@ -5,6 +5,7 @@ use bitcode::{Decode, Encode};
 use crate::{
     cf_types::CfRule,
     pivot::PivotTable,
+    protection::SheetProtection,
     types::{
         Cell, Col, Color, Link, MergedCell, Row, SheetState, Style, StyleIncludes, Theme, Worksheet,
     },
@@ -366,6 +367,12 @@ pub(crate) enum Diff {
         new: Box<TableSnapshot>,
         cells: Vec<PivotCellDiff>,
         rows: Vec<TableRowDiff>,
+    },
+    /// Installs which cells of a sheet are locked and hidden.
+    SetCellProtection {
+        sheet_id: u32,
+        old_value: Box<Option<SheetProtection>>,
+        new_value: Box<Option<SheetProtection>>,
     },
 }
 

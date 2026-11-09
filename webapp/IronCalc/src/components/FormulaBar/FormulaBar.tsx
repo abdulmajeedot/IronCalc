@@ -18,6 +18,7 @@ type FormulaBarProps = {
   onTextUpdated: () => void;
   openDrawer: () => void;
   canEdit: boolean;
+  onBlockedEdit?: () => void;
 };
 
 function FormulaBar(properties: FormulaBarProps) {
@@ -72,6 +73,7 @@ function FormulaBar(properties: FormulaBarProps) {
           // editing cell but never focus the editor.
           onPointerDown={(event) => {
             if (!properties.canEdit) {
+              properties.onBlockedEdit?.();
               return;
             }
             const [sheet, row, column] = model.getSelectedCell();

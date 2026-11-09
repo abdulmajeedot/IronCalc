@@ -3,4 +3,5 @@ export interface SheetOptions {
   color: string;
   sheetId: number;
   state: string;
+  isProtected: boolean;
 }

@@ -1,5 +1,6 @@
 //! Cell notes: what Excel calls a note, and the xlsx format calls a comment.
 
+use crate::user_model::protection::Permission;
 use serde::Serialize;
 
 use crate::expressions::types::Area;
@@ -86,6 +87,7 @@ impl UserModel<'_> {
         column: i32,
         text: &str,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Objects)?;
         let (row, column) = self.merge_anchor(sheet, row, column)?;
         let old_value = self.find_comment(sheet, row, column)?;
         let new_value = Comment {
@@ -115,6 +117,7 @@ impl UserModel<'_> {
 
     /// Removes the note of a cell. It is not an error if there is none.
     pub fn delete_comment(&mut self, sheet: u32, row: i32, column: i32) -> Result<(), String> {
+        self.guard(sheet, Permission::Objects)?;
         let (row, column) = self.merge_anchor(sheet, row, column)?;
         let Some(old_value) = self.find_comment(sheet, row, column)? else {
             return Ok(());

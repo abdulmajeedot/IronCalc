@@ -28,6 +28,11 @@ import {
 } from "../DataTools/DataValidationDialog";
 import { RemoveDuplicatesDialog } from "../DataTools/RemoveDuplicatesDialog";
 import FormulaBar from "../FormulaBar/FormulaBar";
+import {
+  isProtectedSheetError,
+  type ProtectionAction,
+} from "../Protection/ProtectionMenu";
+import { ProtectSheetDialog } from "../Protection/ProtectSheetDialog";
 import type { CfDrawerRequest } from "../RightDrawer/ConditionalFormatting/ConditionalFormatting";
 import type { CfMenuAction } from "../RightDrawer/ConditionalFormatting/ConditionalFormattingMenu";
 import type { SaveError } from "../RightDrawer/NamedStyles/EditNamedStyle";
@@ -57,7 +62,7 @@ import type { WorkbookActions } from "./workbookActions";
 import "./workbook.css";
 import FormatPicker from "../FormatMenu/FormatPicker";
 import { LinkDialog } from "../LinkDialog/LinkDialog";
-import { Alert } from "../Modal";
+import { Alert, Prompt } from "../Modal";
 
 function colorToParam(color: Color): string {
   if (color === undefined) {
@@ -107,6 +112,8 @@ const Workbook = (
   // This is needed because `model` or `workbookState` can change without React being aware of it
   const setRedrawId = useState(0)[1];
 
+  const [protectDialogOpen, setProtectDialogOpen] = useState(false);
+  const [unprotectOpen, setUnprotectOpen] = useState(false);
   const [alertDialog, setAlertDialog] = useState<{
     title: string;
     message: string;
@@ -166,12 +173,13 @@ const Workbook = (
 
   const worksheets = model.getWorksheetsProperties();
   const info = worksheets.map(
-    ({ name, color, sheet_id, state }: WorksheetProperties) => {
+    ({ name, color, sheet_id, state }: WorksheetProperties, index: number) => {
       return {
         name,
         color: model.resolveColor(color) || "var(--palette-common-white)",
         sheetId: sheet_id,
         state,
+        isProtected: model.getSheetProtection(index).is_protected,
       };
     },
   );
@@ -308,6 +316,10 @@ const Workbook = (
           break;
       }
     } catch (e) {
+      if (isProtectedSheetError(e)) {
+        showProtectedMessage();
+        return;
+      }
       if (`${e}`.includes("more than one cell has content")) {
         setAlertDialog({
           title: t("error_dialog.error_merging_cells"),
@@ -322,6 +334,10 @@ const Workbook = (
   // A rejected paste (e.g. it would partially cover a merged cell) gets a
   // dialog; the merged-cell case is localized, the rest show the raw error.
   const showPasteError = (error: unknown) => {
+    if (isProtectedSheetError(error)) {
+      showProtectedMessage();
+      return;
+    }
     const message = `${error}`;
     setAlertDialog({
       title: t("error_dialog.error_paste"),
@@ -490,7 +506,11 @@ const Workbook = (
   ) => {
     try {
       insert();
-    } catch {
+    } catch (error) {
+      if (isProtectedSheetError(error)) {
+        showProtectedMessage();
+        return;
+      }
       const title = t(`error_dialog.error_inserting_${what}`);
       setAlertDialog({ title, message: title });
     }
@@ -503,12 +523,84 @@ const Workbook = (
     try {
       action();
     } catch (e) {
-      setAlertDialog({ title: t("insert_paste.error_title"), message: `${e}` });
+      alertError(t("insert_paste.error_title"), e);
+    }
+    setRedrawId((id) => id + 1);
+  };
+
+  const showProtectedMessage = useCallback(() => {
+    setAlertDialog({
+      title: t("protection.alert_title"),
+      message: t("protection.alert_message"),
+    });
+  }, [t]);
+
+  const alertError = (title: string, error: unknown): void => {
+    if (isProtectedSheetError(error)) {
+      showProtectedMessage();
+    } else {
+      setAlertDialog({ title, message: `${error}` });
+    }
+  };
+
+  // Whatever the protection of a sheet refuses ends up here, wherever in the
+  // app it was tried.
+  useEffect(() => {
+    const onError = (event: ErrorEvent) => {
+      if (isProtectedSheetError(event.error ?? event.message)) {
+        event.preventDefault();
+        showProtectedMessage();
+        setRedrawId((id) => id + 1);
+      }
+    };
+    const onRejection = (event: PromiseRejectionEvent) => {
+      if (isProtectedSheetError(event.reason)) {
+        event.preventDefault();
+        showProtectedMessage();
+        setRedrawId((id) => id + 1);
+      }
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onRejection);
+    return () => {
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onRejection);
+    };
+  }, [showProtectedMessage]);
+
+  const runProtectionAction = (action: ProtectionAction): void => {
+    const view = model.getSelectedView();
+    const [a, b, c, d] = view.range;
+    const area = {
+      first_row: Math.min(a, c),
+      first_column: Math.min(b, d),
+      last_row: Math.max(a, c),
+      last_column: Math.max(b, d),
+    };
+    const cell = model.getCellProtection(view.sheet, view.row, view.column);
+    switch (action) {
+      case "protect":
+        setProtectDialogOpen(true);
+        return;
+      case "unprotect":
+        if (model.getSheetProtection(view.sheet).has_password) {
+          setUnprotectOpen(true);
+          return;
+        }
+        model.unprotectSheet(view.sheet, null);
+        break;
+      case "toggle_locked":
+        model.setCellProtection(view.sheet, area, !cell.locked, null);
+        break;
+      case "toggle_hidden":
+        model.setCellProtection(view.sheet, area, null, !cell.hidden);
+        break;
     }
     setRedrawId((id) => id + 1);
   };
 
   const actions: WorkbookActions = {
+    showProtectedMessage,
     refresh: () => {
       setRedrawId((id) => id + 1);
     },
@@ -739,10 +831,7 @@ const Workbook = (
         model.addConditionalFormatting(sheet, area, action.rule);
       }
     } catch (e) {
-      setAlertDialog({
-        title: t("toolbar.conditional_formatting"),
-        message: `${e}`,
-      });
+      alertError(t("toolbar.conditional_formatting"), e);
     }
     setRedrawId((id) => id + 1);
   };
@@ -757,7 +846,7 @@ const Workbook = (
     try {
       action();
     } catch (e) {
-      setAlertDialog({ title: t("toolbar.filter"), message: `${e}` });
+      alertError(t("toolbar.filter"), e);
     }
     setRedrawId((id) => id + 1);
   };
@@ -841,10 +930,7 @@ const Workbook = (
           column + width,
         );
       } catch (e) {
-        setAlertDialog({
-          title: t("error_dialog.error_deleting_cells"),
-          message: `${e}`,
-        });
+        alertError(t("error_dialog.error_deleting_cells"), e);
       }
       setRedrawId((id) => id + 1);
     },
@@ -856,6 +942,10 @@ const Workbook = (
     },
     onEditKeyPressStart: (initText: string): void => {
       const { sheet, row, column } = model.getSelectedView();
+      if (!model.isCellEditable(sheet, row, column)) {
+        showProtectedMessage();
+        return;
+      }
       const { width: editorWidth, height: editorHeight } = getEditorSize(
         model,
         sheet,
@@ -881,6 +971,10 @@ const Workbook = (
     onCellEditStart: (): void => {
       // User presses F2, we start editing at the edn of the text
       const { sheet, row, column } = model.getSelectedView();
+      if (!model.isCellEditable(sheet, row, column)) {
+        showProtectedMessage();
+        return;
+      }
       const text = model.getCellContent(sheet, row, column);
       const { width: editorWidth, height: editorHeight } = getEditorSize(
         model,
@@ -1043,6 +1137,17 @@ const Workbook = (
   };
 
   const [formulaValue, canEditFormula] = getFormulaValue();
+  const selectedCell = model.getSelectedView();
+  const canEditSelectedCell = model.isCellEditable(
+    selectedCell.sheet,
+    selectedCell.row,
+    selectedCell.column,
+  );
+  const selectedCellProtection = model.getCellProtection(
+    selectedCell.sheet,
+    selectedCell.row,
+    selectedCell.column,
+  );
 
   const getCellStyle = useCallback(() => {
     const { sheet, row, column } = model.getSelectedView();
@@ -1358,6 +1463,13 @@ const Workbook = (
           }}
           formatOptions={fmtSettings}
           onConditionalFormattingAction={runCfAction}
+          protection={{
+            isProtected: model.getSheetProtection(selectedCell.sheet)
+              .is_protected,
+            locked: selectedCellProtection.locked,
+            hidden: selectedCellProtection.hidden,
+          }}
+          onProtectionAction={whenEditable(runProtectionAction)}
           isConditionalFormattingOpen={
             isDrawerOpen && drawerType === "conditionalFormatting"
           }
@@ -1442,7 +1554,10 @@ const Workbook = (
           model={model}
           workbookState={workbookState}
           openDrawer={actions.openNamedRanges}
-          canEdit={canEdit && canEditFormula}
+          canEdit={canEdit && canEditFormula && canEditSelectedCell}
+          onBlockedEdit={
+            canEdit && !canEditSelectedCell ? showProtectedMessage : undefined
+          }
         />
         <Worksheet
           model={model}
@@ -1498,6 +1613,13 @@ const Workbook = (
 
         <SheetTabBar
           canEdit={canEdit}
+          onToggleProtection={() =>
+            runProtectionAction(
+              model.getSheetProtection(model.getSelectedSheet()).is_protected
+                ? "unprotect"
+                : "protect",
+            )
+          }
           sheets={info}
           selectedIndex={model.getSelectedSheet()}
           workbookState={workbookState}
@@ -1673,6 +1795,37 @@ const Workbook = (
           model.setLocale(locale);
           model.setTimezone(timezone);
           model.setLanguage(language);
+          setRedrawId((id) => id + 1);
+        }}
+      />
+      {protectDialogOpen ? (
+        <ProtectSheetDialog
+          onClose={() => setProtectDialogOpen(false)}
+          onProtect={(password, permissions) => {
+            setProtectDialogOpen(false);
+            model.protectSheet(model.getSelectedSheet(), password, permissions);
+            setRedrawId((id) => id + 1);
+          }}
+        />
+      ) : null}
+      <Prompt
+        open={unprotectOpen}
+        onClose={() => setUnprotectOpen(false)}
+        title={t("protection.unprotect_title")}
+        message={t("protection.unprotect_message")}
+        confirmLabel={t("protection.unprotect_confirm")}
+        cancelLabel={t("protection.cancel")}
+        closeLabel={t("protection.cancel")}
+        inputProps={{ type: "password", autoComplete: "off" }}
+        onSubmit={(password) => {
+          try {
+            model.unprotectSheet(model.getSelectedSheet(), password);
+          } catch {
+            setAlertDialog({
+              title: t("protection.unprotect_title"),
+              message: t("protection.wrong_password"),
+            });
+          }
           setRedrawId((id) => id + 1);
         }}
       />

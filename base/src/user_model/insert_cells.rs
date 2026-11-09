@@ -1,5 +1,6 @@
 //! Inserting blank cells, and Insert Copied Cells / Insert Cut Cells.
 
+use crate::user_model::protection::Permission;
 use serde::{Deserialize, Serialize};
 
 use crate::constants::{LAST_COLUMN, LAST_ROW};
@@ -126,6 +127,7 @@ impl UserModel<'_> {
 
     /// Inserts blank cells over `area`, moving what is there down or right.
     pub fn insert_cells(&mut self, sheet: u32, area: PivotArea, down: bool) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         self.shift_cells_step(
             sheet,
             (
@@ -152,6 +154,7 @@ impl UserModel<'_> {
         mode: InsertCopiedMode,
         count: i32,
     ) -> Result<(), String> {
+        self.guard(self.view.sheet, Permission::Never)?;
         let depth = self.history.undo_stack.len();
         let result =
             self.insert_copied_steps(source_sheet, source_range, clipboard, is_cut, mode, count);

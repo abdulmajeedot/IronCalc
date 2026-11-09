@@ -409,6 +409,9 @@ impl<'a> UserModel<'a> {
         if self.model.workbook.worksheet(sheet).is_err() {
             return Err(format!("Invalid worksheet index {sheet}"));
         }
+        if !self.can_select_cell(sheet, row, column) {
+            return Ok(());
+        }
         // A covered cell can never be selected: snap to the anchor and select
         // the whole merged range.
         self.select_single_cell(sheet, row, column)
@@ -439,6 +442,9 @@ impl<'a> UserModel<'a> {
         }
         if self.model.workbook.worksheet(sheet).is_err() {
             return Err(format!("Invalid worksheet index {sheet}"));
+        }
+        if !self.can_select_cell(sheet, end_row, end_column) {
+            return Ok(());
         }
         let view = self.sheet_view(sheet)?;
         let (selected_row, selected_column) = (view.row, view.column);
@@ -683,7 +689,10 @@ impl<'a> UserModel<'a> {
             Some(m) => m.last_column() + 1,
             None => view.column + 1,
         };
-        while new_column <= LAST_COLUMN && worksheet.is_column_hidden(new_column)? {
+        while new_column <= LAST_COLUMN
+            && (worksheet.is_column_hidden(new_column)?
+                || !self.can_select_cell(sheet, row, new_column))
+        {
             new_column += 1;
         }
         if !is_valid_column_number(new_column) {
@@ -714,7 +723,10 @@ impl<'a> UserModel<'a> {
             Some(m) => m.column - 1,
             None => view.column - 1,
         };
-        while new_column >= 1 && worksheet.is_column_hidden(new_column)? {
+        while new_column >= 1
+            && (worksheet.is_column_hidden(new_column)?
+                || !self.can_select_cell(sheet, row, new_column))
+        {
             new_column -= 1;
         }
         if !is_valid_column_number(new_column) {
@@ -740,7 +752,9 @@ impl<'a> UserModel<'a> {
             Some(m) => m.row - 1,
             None => view.row - 1,
         };
-        while new_row >= 1 && worksheet.is_row_hidden(new_row)? {
+        while new_row >= 1
+            && (worksheet.is_row_hidden(new_row)? || !self.can_select_cell(sheet, new_row, column))
+        {
             new_row -= 1;
         }
         if !is_valid_row(new_row) {
@@ -767,7 +781,9 @@ impl<'a> UserModel<'a> {
             Some(m) => m.last_row() + 1,
             None => view.row + 1,
         };
-        while new_row <= LAST_ROW && worksheet.is_row_hidden(new_row)? {
+        while new_row <= LAST_ROW
+            && (worksheet.is_row_hidden(new_row)? || !self.can_select_cell(sheet, new_row, column))
+        {
             new_row += 1;
         }
         if !is_valid_row(new_row) {

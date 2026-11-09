@@ -1,3 +1,4 @@
+use crate::user_model::protection::Permission;
 use crate::{
     cf_types::{CfRule, CfRuleInput, ConditionalFormatting, ConditionalFormattingView},
     conditional_formatting::parse_sqref,
@@ -18,6 +19,7 @@ impl<'a> UserModel<'a> {
         sheet: u32,
         area: Option<PivotArea>,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let old_value = self
             .model
             .workbook
@@ -148,6 +150,7 @@ impl<'a> UserModel<'a> {
         range: &str,
         rule: CfRuleInput,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let range = &canonical_sqref(range)?;
         let priority = self.model.add_conditional_formatting(sheet, range, rule)?;
         // Read back the stored entry so the Diff contains the dxf_id that was assigned.
@@ -178,6 +181,7 @@ impl<'a> UserModel<'a> {
 
     /// Removes the CF rule at `index` from `sheet`.
     pub fn delete_conditional_formatting(&mut self, sheet: u32, index: u32) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let old = self
             .model
             .delete_conditional_formatting(sheet, index as usize)?;
@@ -200,6 +204,7 @@ impl<'a> UserModel<'a> {
         new_range: &str,
         new_rule: CfRuleInput,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let new_range = &canonical_sqref(new_range)?;
         let old =
             self.model
@@ -240,6 +245,7 @@ impl<'a> UserModel<'a> {
         sheet: u32,
         index: u32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         self.swap_conditional_formatting_priority(sheet, index, true)
     }
 
@@ -251,6 +257,7 @@ impl<'a> UserModel<'a> {
         sheet: u32,
         index: u32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         self.swap_conditional_formatting_priority(sheet, index, false)
     }
 

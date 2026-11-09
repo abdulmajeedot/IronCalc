@@ -1922,6 +1922,64 @@ impl Model {
             .map_err(to_js_error)
     }
 
+    #[wasm_bindgen(
+        js_name = "getSheetProtection",
+        unchecked_return_type = "SheetProtectionInfo"
+    )]
+    pub fn get_sheet_protection(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_sheet_protection(sheet))
+    }
+
+    #[wasm_bindgen(
+        js_name = "getCellProtection",
+        unchecked_return_type = "CellProtection"
+    )]
+    pub fn get_cell_protection(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_cell_protection(sheet, row, column))
+    }
+
+    #[wasm_bindgen(js_name = "isCellEditable")]
+    pub fn is_cell_editable(&self, sheet: u32, row: i32, column: i32) -> bool {
+        self.model.is_cell_editable(sheet, row, column)
+    }
+
+    #[wasm_bindgen(js_name = "protectSheet")]
+    pub fn protect_sheet(
+        &mut self,
+        sheet: u32,
+        password: Option<String>,
+        #[wasm_bindgen(unchecked_param_type = "ProtectionPermissions")] permissions: JsValue,
+    ) -> Result<(), JsError> {
+        self.model
+            .protect_sheet(sheet, password.as_deref(), from_js(permissions)?)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "unprotectSheet")]
+    pub fn unprotect_sheet(&mut self, sheet: u32, password: Option<String>) -> Result<(), JsError> {
+        self.model
+            .unprotect_sheet(sheet, password.as_deref())
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setCellProtection")]
+    pub fn set_cell_protection(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+        locked: Option<bool>,
+        hidden: Option<bool>,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_cell_protection(sheet, from_js(area)?, locked, hidden)
+            .map_err(to_js_error)
+    }
+
     /// The formula for what was typed as a "cell value" rule's value.
     #[wasm_bindgen(js_name = "cfValueToFormula")]
     pub fn cf_value_to_formula(&self, value: &str) -> String {

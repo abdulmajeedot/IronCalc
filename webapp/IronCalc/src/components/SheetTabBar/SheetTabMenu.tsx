@@ -3,6 +3,8 @@ import {
   ArrowRight,
   Copy,
   EyeOff,
+  Lock,
+  LockOpen,
   PaintBucket,
   TextCursorInput,
   Trash2,
@@ -19,6 +21,8 @@ interface SheetTabMenuProps {
   onOpenColorPicker: () => void;
   onDuplicateSheet: () => void;
   onHideSheet: () => void;
+  isProtected: boolean;
+  onToggleProtection: () => void;
   onDeleteSheet: () => void;
 }
 
@@ -30,6 +34,8 @@ export function SheetTabMenu({
   onOpenColorPicker,
   onDuplicateSheet,
   onHideSheet,
+  isProtected,
+  onToggleProtection,
   onDeleteSheet,
 }: SheetTabMenuProps) {
   const { t } = useTranslation();
@@ -53,6 +59,16 @@ export function SheetTabMenu({
       </MenuItem>
       <MenuItem icon={<EyeOff />} disabled={!canDelete} onClick={onHideSheet}>
         {t("sheet_tab.hide_sheet")}
+      </MenuItem>
+      <MenuItem
+        icon={isProtected ? <LockOpen /> : <Lock />}
+        onClick={onToggleProtection}
+      >
+        {t(
+          isProtected
+            ? "protection.unprotect_sheet"
+            : "protection.protect_sheet",
+        )}
       </MenuItem>
       <MenuDivider />
       <MenuItem

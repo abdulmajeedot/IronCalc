@@ -23,6 +23,8 @@ chrono = "0.4"
 bitcode = "0.6.9"
 csv = "1.3.0"
 statrs = { version = "0.19.1", default-features = false, features = [] }
+sha2 = "0.10"
+base64 = "0.22"
 
 [dev-dependencies]
 urlencoding = "2.1"

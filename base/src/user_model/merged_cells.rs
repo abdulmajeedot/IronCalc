@@ -1,6 +1,7 @@
 use crate::expressions::types::Area;
 use crate::merged_cells::{merge_across_ranges, merge_down_ranges};
 use crate::types::{Cell, MergedCell};
+use crate::user_model::protection::Permission;
 use std::borrow::Cow;
 
 use super::{common::UserModel, history::Diff};
@@ -19,6 +20,7 @@ impl UserModel<'_> {
     /// See also:
     /// * [Model::merge_cells](crate::Model::merge_cells)
     pub fn merge_cells(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::Never)?;
         self.merge_ranges(std::slice::from_ref(range), false)
     }
 
@@ -29,6 +31,7 @@ impl UserModel<'_> {
     /// See also:
     /// * [Model::merge_cells_center](crate::Model::merge_cells_center)
     pub fn merge_cells_center(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::Never)?;
         self.merge_ranges(std::slice::from_ref(range), true)
     }
 
@@ -40,6 +43,7 @@ impl UserModel<'_> {
     /// See also:
     /// * [Model::merge_cells_across](crate::Model::merge_cells_across)
     pub fn merge_cells_across(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::Never)?;
         self.merge_ranges(&merge_across_ranges(range)?, false)
     }
 
@@ -51,6 +55,7 @@ impl UserModel<'_> {
     /// See also:
     /// * [Model::merge_cells_down](crate::Model::merge_cells_down)
     pub fn merge_cells_down(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::Never)?;
         self.merge_ranges(&merge_down_ranges(range)?, false)
     }
 
@@ -214,6 +219,7 @@ impl UserModel<'_> {
     /// See also:
     /// * [Model::unmerge_cells](crate::Model::unmerge_cells)
     pub fn unmerge_cells(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::Never)?;
         let sheet = range.sheet;
         let old_value = self.model.get_merged_cells(sheet)?.to_vec();
         self.model.unmerge_cells(range)?;

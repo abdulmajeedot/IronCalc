@@ -1,5 +1,6 @@
 //! Creating and editing tables and slicers with undo. See [`crate::table`].
 
+use crate::user_model::protection::Permission;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use bitcode::{Decode, Encode};
@@ -439,6 +440,7 @@ impl UserModel<'_> {
     /// Turns a sheet's filter on or off, as the Filter button does. On, it
     /// goes on `area`, or on the block of data around it if that's one cell.
     pub fn toggle_sheet_filter(&mut self, sheet: u32, area: PivotArea) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         let sheet_id = self.model.workbook.worksheet(sheet)?.sheet_id;
         if let Some(info) = self.get_sheet_filter(sheet) {
             let name = info.name;
@@ -502,6 +504,7 @@ impl UserModel<'_> {
 
     /// Applies a filter again, so it takes in values that have changed.
     pub fn reapply_filters(&mut self, name: &str) -> Result<(), String> {
+        self.guard_table(name, Permission::AutoFilter)?;
         let scope = self.model.filter_scope(name)?;
         let name = name.to_string();
         self.table_edit(scope.sheet, &[scope.area], move |user| {
@@ -655,6 +658,7 @@ impl UserModel<'_> {
         has_headers: bool,
         style_name: Option<String>,
     ) -> Result<String, String> {
+        self.guard(sheet, Permission::Never)?;
         let mut full = area;
         if !has_headers {
             full.last_row += 1;
@@ -912,6 +916,7 @@ impl UserModel<'_> {
 
     /// Applies the Table Design panel.
     pub fn set_table_options(&mut self, name: &str, options: TableOptions) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let name = name.to_string();
         let grown = PivotArea {
@@ -957,6 +962,7 @@ impl UserModel<'_> {
 
     /// Moves a table's edges. Its header row must stay on the same row.
     pub fn resize_table(&mut self, name: &str, new_area: PivotArea) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         if new_area.first_row != area.first_row || new_area.first_column != area.first_column {
             return Err("The headers of a table must stay in the same place".to_string());
@@ -1025,6 +1031,7 @@ impl UserModel<'_> {
         column: &str,
         function: Option<String>,
     ) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let table = self.table_named(name)?;
         if table.totals_row_count == 0 {
@@ -1063,6 +1070,7 @@ impl UserModel<'_> {
         column: &str,
         rule: Option<TableFilterRule>,
     ) -> Result<(), String> {
+        self.guard_table(name, Permission::AutoFilter)?;
         let scope = self.model.filter_scope(name)?;
         scope.index(column).ok_or("Column not found")?;
         let (sheet, area, first, last) = (scope.sheet, scope.area, scope.first, scope.last);
@@ -1102,6 +1110,7 @@ impl UserModel<'_> {
 
     /// Removes every filter of a table and shows its rows.
     pub fn clear_table_filters(&mut self, name: &str) -> Result<(), String> {
+        self.guard_table(name, Permission::AutoFilter)?;
         let scope = self.model.filter_scope(name)?;
         let (sheet, area) = (scope.sheet, scope.area);
         let name = name.to_string();
@@ -1117,6 +1126,18 @@ impl UserModel<'_> {
 
     /// Rows move whole, and only the rows showing take part, as in Excel.
     pub fn sort_table(&mut self, name: &str, column: &str, descending: bool) -> Result<(), String> {
+        self.guard_table(name, Permission::Sort)?;
+        if let Ok(scope) = self.model.filter_scope(name) {
+            self.guard_cells(
+                scope.sheet,
+                (
+                    scope.first,
+                    scope.area.first_column,
+                    scope.last,
+                    scope.area.last_column,
+                ),
+            )?;
+        }
         let scope = self.model.filter_scope(name)?;
         let offset = scope.index(column).ok_or("Column not found")?;
         let column_name = scope.columns[offset].clone();
@@ -1180,6 +1201,7 @@ impl UserModel<'_> {
 
     /// Turns a table back into cells that keep its look.
     pub fn convert_table_to_range(&mut self, name: &str) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let name = name.to_string();
         self.table_edit(sheet, &[area], move |user| {
@@ -1275,6 +1297,7 @@ impl UserModel<'_> {
 
     /// Deletes one row of a table. What is beside the table stays.
     pub fn delete_table_row(&mut self, name: &str, row: i32) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let table = self.table_named(name)?;
         let (first, last) = table_data_rows(table, &area);
@@ -1289,6 +1312,7 @@ impl UserModel<'_> {
 
     /// Deletes one column of a table. What is above and below it stays.
     pub fn delete_table_column(&mut self, name: &str, column: i32) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         if !(area.first_column..=area.last_column).contains(&column) {
             return Err("That column is not part of the table".to_string());
@@ -1351,6 +1375,7 @@ impl UserModel<'_> {
     /// Inserts a row into a table so that the new row is `row`. Rows beside
     /// the table move too, which keeps every formula pointing at the right cell.
     pub fn insert_table_row(&mut self, name: &str, row: i32) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let table = self.table_named(name)?;
         let (first, last) = table_data_rows(table, &area);
@@ -1390,6 +1415,7 @@ impl UserModel<'_> {
 
     /// Inserts a column into a table so that the new column is `column`.
     pub fn insert_table_column(&mut self, name: &str, column: i32) -> Result<(), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         if !(area.first_column..=area.last_column).contains(&column) {
             return Err("A new column must be inside the table".to_string());
@@ -1440,6 +1466,7 @@ impl UserModel<'_> {
         name: &str,
         columns: &[String],
     ) -> Result<(u32, u32), String> {
+        self.guard_table(name, Permission::Never)?;
         let (sheet, area) = self.table_place(name)?;
         let table = self.table_named(name)?;
         let (first, last) = table_data_rows(table, &area);
@@ -1487,6 +1514,7 @@ impl UserModel<'_> {
         columns: &[i32],
         has_headers: bool,
     ) -> Result<(u32, u32), String> {
+        self.guard(sheet, Permission::Never)?;
         if columns.is_empty() {
             return Err("Choose at least one column".to_string());
         }
@@ -1882,6 +1910,7 @@ impl UserModel<'_> {
         name: &str,
         columns: &[String],
     ) -> Result<Vec<String>, String> {
+        self.guard_table(name, Permission::Objects)?;
         let (sheet, area) = self.table_place(name)?;
         let table = self.table_named(name)?;
         let mut sources = Vec::new();
@@ -1905,6 +1934,7 @@ impl UserModel<'_> {
         index: u32,
         fields: &[String],
     ) -> Result<Vec<String>, String> {
+        self.guard_pivot(index, Permission::Objects)?;
         let pivot = self
             .model
             .workbook
@@ -1952,6 +1982,7 @@ impl UserModel<'_> {
 
     /// Replaces what a slicer shows and where it sits. Its source stays.
     pub fn update_slicer(&mut self, name: &str, mut slicer: Slicer) -> Result<(), String> {
+        self.guard_slicer(name, Permission::Objects)?;
         let position = self.slicer_position(name)?;
         let current = self.model.workbook.slicers[position].clone();
         slicer.source = current.source;
@@ -1966,6 +1997,7 @@ impl UserModel<'_> {
 
     /// Removes a slicer. The filter it set stays, as in Excel.
     pub fn delete_slicer(&mut self, name: &str) -> Result<(), String> {
+        self.guard_slicer(name, Permission::Objects)?;
         let position = self.slicer_position(name)?;
         let sheet_id = self.model.workbook.slicers[position].sheet_id;
         let sheet = self
@@ -1984,6 +2016,7 @@ impl UserModel<'_> {
         name: &str,
         links: Vec<SlicerPivot>,
     ) -> Result<(), String> {
+        self.guard_slicer(name, Permission::Objects)?;
         if links.is_empty() {
             return Err("A slicer must stay connected to a PivotTable".to_string());
         }
@@ -1996,6 +2029,7 @@ impl UserModel<'_> {
 
     /// Shows only `selected`. Selecting nothing, or everything, clears the filter.
     pub fn set_slicer_selection(&mut self, name: &str, selected: &[String]) -> Result<(), String> {
+        self.guard_slicer(name, Permission::AutoFilter)?;
         let position = self.slicer_position(name)?;
         let slicer = self.model.workbook.slicers[position].clone();
         let keep: HashSet<&str> = selected.iter().map(String::as_str).collect();

@@ -927,6 +927,35 @@ export interface ValidationSettings {
 
 export type InsertCopiedMode = "down" | "right" | "rows" | "columns";
 
+export interface ProtectionPermissions {
+  select_locked_cells: boolean;
+  select_unlocked_cells: boolean;
+  format_cells: boolean;
+  format_columns: boolean;
+  format_rows: boolean;
+  insert_columns: boolean;
+  insert_rows: boolean;
+  insert_hyperlinks: boolean;
+  delete_columns: boolean;
+  delete_rows: boolean;
+  sort: boolean;
+  auto_filter: boolean;
+  pivot_tables: boolean;
+  objects: boolean;
+  scenarios: boolean;
+}
+
+export interface SheetProtectionInfo {
+  is_protected: boolean;
+  has_password: boolean;
+  permissions: ProtectionPermissions;
+}
+
+export interface CellProtection {
+  locked: boolean;
+  hidden: boolean;
+}
+
 export interface ValidationFailure {
   title: string;
   message: string;

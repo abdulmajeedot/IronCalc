@@ -28,6 +28,7 @@ export interface SheetTabBarProps {
   onOpenRegionalSettings: () => void;
   /** When false, sheet add/rename/delete and regional settings affordances are hidden. */
   canEdit: boolean;
+  onToggleProtection: () => void;
 }
 
 function SheetTabBar(props: SheetTabBarProps) {
@@ -41,6 +42,7 @@ function SheetTabBar(props: SheetTabBarProps) {
         name: s.name,
         color: s.color,
         sheetId: s.sheetId,
+        isProtected: s.isProtected,
       };
     })
     .filter((s) => s.state === "visible");
@@ -99,6 +101,8 @@ function SheetTabBar(props: SheetTabBarProps) {
                 props.onSheetDuplicated();
               }}
               onHideSheet={props.onHideSheet}
+              isProtected={tab.isProtected}
+              onToggleProtection={props.onToggleProtection}
               workbookState={workbookState}
               model={props.model}
               currentTheme={props.model.getTheme()}

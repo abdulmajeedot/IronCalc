@@ -139,6 +139,10 @@ pub struct Workbook {
     /// filter by is kept in `table_filters`, under the name of the filter.
     #[bitcode(skip)]
     pub sheet_filters: Vec<crate::table::SheetFilter>,
+    /// Which sheets are protected and which cells are unlocked. Saved next to
+    /// the workbook, like the pivots.
+    #[bitcode(skip)]
+    pub sheet_protections: Vec<crate::protection::SheetProtection>,
 }
 
 /// The sheet on screen when a workbook was saved, and what each sheet showed.

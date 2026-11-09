@@ -1,5 +1,6 @@
 #![deny(missing_docs)]
 
+use crate::user_model::protection::Permission;
 use std::borrow::Cow;
 use std::{collections::HashMap, fmt::Debug};
 
@@ -214,7 +215,7 @@ fn update_style(old_value: &Style, style_path: &str, value: &str) -> Result<Styl
 pub struct UserModel<'a> {
     pub(crate) model: Model<'a>,
     pub(crate) history: History,
-    send_queue: Vec<QueueDiffs>,
+    pub(crate) send_queue: Vec<QueueDiffs>,
     pause_evaluation: bool,
     /// What the user is looking at: selected sheet, selection and scroll
     /// position of each sheet, window size. Saved with the workbook through
@@ -436,6 +437,7 @@ impl<'a> UserModel<'a> {
         column: i32,
         value: &str,
     ) -> Result<(), String> {
+        self.guard_cells(sheet, (row, column, row, column))?;
         if !is_valid_column_number(column) {
             return Err("Invalid column".to_string());
         }
@@ -535,6 +537,11 @@ impl<'a> UserModel<'a> {
     /// * [Model::get_localized_cell_content]
     #[inline]
     pub fn get_cell_content(&self, sheet: u32, row: i32, column: i32) -> Result<String, String> {
+        if self.model.is_sheet_protected(sheet)
+            && self.model.get_cell_protection(sheet, row, column).hidden
+        {
+            return Ok(String::new());
+        }
         self.model.get_localized_cell_content(sheet, row, column)
     }
 
@@ -614,6 +621,7 @@ impl<'a> UserModel<'a> {
     /// * [Model::duplicate_sheet]
     pub fn duplicate_sheet(&mut self, sheet: u32) -> Result<(), String> {
         let (_name, new_index) = self.model.duplicate_sheet(sheet)?;
+        self.copy_sheet_protection(sheet, new_index)?;
         self.set_selected_sheet(new_index)?;
         self.push_diff_list(vec![Diff::DuplicateSheet {
             source_index: sheet,
@@ -670,7 +678,7 @@ impl<'a> UserModel<'a> {
     ///
     /// The reorder is undoable/redoable, and the new order is preserved when the
     /// workbook is saved. Cross-sheet formula references stay valid across the
-    /// move (sheet order is a position, not an identity — references key off the
+    /// move (sheet order is a position, not an identity â€” references key off the
     /// sheet name/id). The selection follows the same sheet across the move.
     ///
     /// Moving a sheet to its current position is a no-op (no history entry). Fails
@@ -762,6 +770,15 @@ impl<'a> UserModel<'a> {
     /// See also:
     /// * [Model::range_clear_all]
     pub fn range_clear_all(&mut self, range: &Area) -> Result<(), String> {
+        self.guard_cells(
+            range.sheet,
+            (
+                range.row,
+                range.column,
+                range.row + range.height - 1,
+                range.column + range.width - 1,
+            ),
+        )?;
         let sheet = range.sheet;
         // TODO: full rows/columns
         let mut old_value = Vec::new();
@@ -810,6 +827,15 @@ impl<'a> UserModel<'a> {
     /// See also:
     /// * [Model::range_clear_contents]
     pub fn range_clear_contents(&mut self, range: &Area) -> Result<(), String> {
+        self.guard_cells(
+            range.sheet,
+            (
+                range.row,
+                range.column,
+                range.row + range.height - 1,
+                range.column + range.width - 1,
+            ),
+        )?;
         let sheet = range.sheet;
         // TODO: full rows/columns
         let mut old_value = Vec::new();
@@ -1004,6 +1030,7 @@ impl<'a> UserModel<'a> {
     /// * [UserModel::range_clear_all]
     /// * [UserModel::range_clear_contents]
     pub fn range_clear_formatting(&mut self, range: &Area) -> Result<(), String> {
+        self.guard(range.sheet, Permission::FormatCells)?;
         let sheet = range.sheet;
         let mut diff_list = Vec::new();
         if range.row == 1 && range.height == LAST_ROW {
@@ -1058,9 +1085,9 @@ impl<'a> UserModel<'a> {
     /// Inserts `row_count` blank rows starting at `row` (both 0-based).
     ///
     /// Parameters
-    /// * `sheet` – worksheet index.
-    /// * `row` – first row to insert.
-    /// * `row_count` – number of rows (> 0).
+    /// * `sheet` â€“ worksheet index.
+    /// * `row` â€“ first row to insert.
+    /// * `row_count` â€“ number of rows (> 0).
     ///
     /// History: the method pushes `row_count` `Diff::InsertRow`
     /// items **all using the same `row` index**.  Replaying those diffs (undo / redo)
@@ -1069,6 +1096,7 @@ impl<'a> UserModel<'a> {
     ///
     /// See also [`Model::insert_rows`].
     pub fn insert_rows(&mut self, sheet: u32, row: i32, row_count: i32) -> Result<(), String> {
+        self.guard(sheet, Permission::InsertRows)?;
         let old_merged_cells = self.model.get_merged_cells(sheet)?.to_vec();
         self.model.insert_rows(sheet, row, row_count)?;
 
@@ -1086,9 +1114,9 @@ impl<'a> UserModel<'a> {
     /// Inserts `column_count` blank columns starting at `column` (0-based).
     ///
     /// Parameters
-    /// * `sheet` – worksheet index.
-    /// * `column` – first column to insert.
-    /// * `column_count` – number of columns (> 0).
+    /// * `sheet` â€“ worksheet index.
+    /// * `column` â€“ first column to insert.
+    /// * `column_count` â€“ number of columns (> 0).
     ///
     /// History: pushes one `Diff::InsertColumn`
     /// per inserted column, all with the same `column` value, preventing index
@@ -1101,6 +1129,7 @@ impl<'a> UserModel<'a> {
         column: i32,
         column_count: i32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::InsertColumns)?;
         let old_merged_cells = self.model.get_merged_cells(sheet)?.to_vec();
         self.model.insert_columns(sheet, column, column_count)?;
 
@@ -1118,11 +1147,13 @@ impl<'a> UserModel<'a> {
     /// Deletes `row_count` rows starting at `row`.
     ///
     /// History: a `Diff::DeleteRow` is created for
-    /// each row, ordered **bottom → top**.  Undo therefore recreates rows from
-    /// top → bottom and redo removes them bottom → top, avoiding index drift.
+    /// each row, ordered **bottom â†’ top**.  Undo therefore recreates rows from
+    /// top â†’ bottom and redo removes them bottom â†’ top, avoiding index drift.
     ///
     /// See also [`Model::delete_rows`].
     pub fn delete_rows(&mut self, sheet: u32, row: i32, row_count: i32) -> Result<(), String> {
+        self.guard(sheet, Permission::DeleteRows)?;
+        self.guard_rows(sheet, row, row_count)?;
         let worksheet = self.model.workbook.worksheet(sheet)?;
         let mut old_data = Vec::new();
         // Collect data for all rows to be deleted
@@ -1189,7 +1220,7 @@ impl<'a> UserModel<'a> {
     /// Deletes `column_count` columns starting at `column`.
     ///
     /// History: pushes one `Diff::DeleteColumn`
-    /// per column, **right → left**, so replaying the list is always safe with
+    /// per column, **right â†’ left**, so replaying the list is always safe with
     /// respect to index shifts.
     ///
     /// See also [`Model::delete_columns`].
@@ -1199,6 +1230,8 @@ impl<'a> UserModel<'a> {
         column: i32,
         column_count: i32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::DeleteColumns)?;
+        self.guard_columns(sheet, column, column_count)?;
         let worksheet = self.model.workbook.worksheet(sheet)?;
         let mut old_data = Vec::new();
         // Collect data for all columns to be deleted
@@ -1278,6 +1311,7 @@ impl<'a> UserModel<'a> {
         column_count: i32,
         delta: i32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         if delta == 0 || column_count <= 0 {
             return Ok(());
         }
@@ -1322,6 +1356,7 @@ impl<'a> UserModel<'a> {
         row_count: i32,
         delta: i32,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::Never)?;
         if delta == 0 || row_count <= 0 {
             return Ok(());
         }
@@ -1368,6 +1403,7 @@ impl<'a> UserModel<'a> {
         column_end: i32,
         width: f64,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::FormatColumns)?;
         let mut diff_list = Vec::new();
         for column in column_start..=column_end {
             let old_value = self.model.get_column_width(sheet, column)?;
@@ -1394,6 +1430,7 @@ impl<'a> UserModel<'a> {
         column_end: i32,
         hidden: bool,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::FormatColumns)?;
         let mut diff_list = Vec::new();
         for column in column_start..=column_end {
             let old_value = self
@@ -1458,6 +1495,7 @@ impl<'a> UserModel<'a> {
         row_end: i32,
         hidden: bool,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::FormatRows)?;
         let mut diff_list = Vec::new();
         for row in row_start..=row_end {
             let old_value = self.model.workbook.worksheet(sheet)?.is_row_hidden(row)?;
@@ -1509,6 +1547,7 @@ impl<'a> UserModel<'a> {
         row_end: i32,
         height: f64,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::FormatRows)?;
         let mut diff_list = Vec::new();
         for row in row_start..=row_end {
             let old_value = self.model.get_row_height(sheet, row)?;
@@ -1594,6 +1633,7 @@ impl<'a> UserModel<'a> {
 
     /// Paste `styles` in the selected area
     pub fn on_paste_styles(&mut self, styles: &[Vec<Style>]) -> Result<(), String> {
+        self.guard(self.view.sheet, Permission::FormatCells)?;
         let styles_height = styles.len() as i32;
         let styles_width = styles[0].len() as i32;
         let sheet = self.view.sheet;
@@ -1668,6 +1708,7 @@ impl<'a> UserModel<'a> {
         style_path: &str,
         value: &str,
     ) -> Result<(), String> {
+        self.guard(range.sheet, Permission::FormatCells)?;
         let sheet = range.sheet;
         let mut diff_list = Vec::new();
         if range.row == 1 && range.height == LAST_ROW {
@@ -2103,13 +2144,14 @@ impl<'a> UserModel<'a> {
         height: i32,
         formula: &str,
     ) -> Result<(), String> {
+        self.guard_cells(sheet, (row, column, row + height - 1, column + width - 1))?;
         let ws = self.model.workbook.worksheet(sheet)?;
         let mut old_values = Vec::new();
         for r in row..row + height {
             let mut row_vals = Vec::new();
             for c in column..column + width {
                 let cell = ws.cell(r, c).map(Cow::into_owned);
-                // SpillCells are transient — restored by re-evaluation, so store as None.
+                // SpillCells are transient â€” restored by re-evaluation, so store as None.
                 let cell = if matches!(cell, Some(Cell::SpillCell { .. })) {
                     None
                 } else {
@@ -2292,7 +2334,7 @@ impl<'a> UserModel<'a> {
     /// merged ranges on their own when they are (re)played, but their undo
     /// cannot always reconstruct the original ranges (a fully deleted merge is
     /// gone, deleting rows above a merge and re-inserting them displaces it).
-    /// The snapshot has `old_value == new_value` — a no-op when applied — and
+    /// The snapshot has `old_value == new_value` â€” a no-op when applied â€” and
     /// must go *before* the structural diff in the list, so that on undo
     /// (replayed in reverse) it runs last and restores the exact original list.
     pub(super) fn merged_cells_snapshot_diffs(

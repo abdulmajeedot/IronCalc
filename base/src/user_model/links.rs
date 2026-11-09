@@ -1,3 +1,4 @@
+use crate::user_model::protection::Permission;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -40,6 +41,7 @@ impl UserModel<'_> {
         link: Link,
         label: Option<&str>,
     ) -> Result<(), String> {
+        self.guard(sheet, Permission::InsertHyperlinks)?;
         let old_link = self.model.get_cell_link(sheet, row, column)?;
         let is_new_link = old_link.is_none();
         let mut diff_list = Vec::new();
@@ -113,6 +115,7 @@ impl UserModel<'_> {
     /// Removes the link attached to cell (`row`, `column`). It is not an error if the
     /// cell has no link. The cell content and the cell style are left untouched.
     pub fn delete_cell_link(&mut self, sheet: u32, row: i32, column: i32) -> Result<(), String> {
+        self.guard(sheet, Permission::InsertHyperlinks)?;
         let old_value = self.model.get_cell_link(sheet, row, column)?;
         if old_value.is_none() {
             return Ok(());

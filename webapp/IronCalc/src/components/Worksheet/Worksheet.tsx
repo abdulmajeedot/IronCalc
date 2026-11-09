@@ -21,6 +21,7 @@ import {
 import Editor from "../Editor/Editor";
 import { Menu } from "../Menu/Menu";
 import { MenuItem } from "../Menu/MenuItem";
+import { isProtectedSheetError } from "../Protection/ProtectionMenu";
 import {
   type PivotMenuState,
   PivotMenus,
@@ -135,6 +136,13 @@ const Worksheet = forwardRef(
     const [rowColErrorTitle, setRowColErrorTitle] = useState<string | null>(
       null,
     );
+    const rowColError = (title: string, error: unknown): void => {
+      if (isProtectedSheetError(error)) {
+        actions.showProtectedMessage();
+      } else {
+        setRowColErrorTitle(title);
+      }
+    };
     const [columnWidthDialogOpen, setColumnWidthDialogOpen] = useState(false);
     const [columnWidthDefault, setColumnWidthDefault] = useState("");
     // The raw engine error of a rejected autofill (localized when rendered)
@@ -616,6 +624,9 @@ const Worksheet = forwardRef(
         onCommentHover: showNoteHover,
         onAutofillError: (message) => {
           // the known rejections get a dialog; anything else stays silent
+          if (isProtectedSheetError(message)) {
+            actions.showProtectedMessage();
+          }
           if (
             message.includes("merged cell") ||
             message.includes("array formula")
@@ -1065,6 +1076,10 @@ const Worksheet = forwardRef(
               return;
             }
             const { sheet, row, column } = model.getSelectedView();
+            if (!model.isCellEditable(sheet, row, column)) {
+              actions.showProtectedMessage();
+              return;
+            }
             const text = model.getCellContent(sheet, row, column);
             const { width: editorWidth, height: editorHeight } = getEditorSize(
               model,
@@ -1286,8 +1301,8 @@ const Worksheet = forwardRef(
             const view = model.getSelectedView();
             try {
               model.deleteColumns(view.sheet, view.column, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_columns"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_deleting_columns"), e);
             }
             setCellContextMenuOpen(false);
             refresh();
@@ -1296,8 +1311,8 @@ const Worksheet = forwardRef(
             const view = model.getSelectedView();
             try {
               model.deleteRows(view.sheet, view.row, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_rows"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_deleting_rows"), e);
             }
             setCellContextMenuOpen(false);
             refresh();
@@ -1337,8 +1352,8 @@ const Worksheet = forwardRef(
                 columnEnd - columnStart + 1,
                 -1,
               );
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_moving_columns"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_moving_columns"), e);
             }
             setColHeaderContextMenuOpen(false);
           }}
@@ -1353,8 +1368,8 @@ const Worksheet = forwardRef(
                 columnEnd - columnStart + 1,
                 1,
               );
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_moving_columns"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_moving_columns"), e);
             }
             setColHeaderContextMenuOpen(false);
           }}
@@ -1385,8 +1400,8 @@ const Worksheet = forwardRef(
                 columnStart,
                 columnEnd - columnStart + 1,
               );
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_columns"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_deleting_columns"), e);
             }
             setColHeaderContextMenuOpen(false);
           }}
@@ -1457,8 +1472,8 @@ const Worksheet = forwardRef(
             const rowEnd = view.range[2];
             try {
               model.moveRows(view.sheet, rowStart, rowEnd - rowStart + 1, -1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_moving_rows"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_moving_rows"), e);
             }
             setRowHeaderContextMenuOpen(false);
           }}
@@ -1468,8 +1483,8 @@ const Worksheet = forwardRef(
             const rowEnd = view.range[2];
             try {
               model.moveRows(view.sheet, rowStart, rowEnd - rowStart + 1, 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_moving_rows"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_moving_rows"), e);
             }
             setRowHeaderContextMenuOpen(false);
           }}
@@ -1496,8 +1511,8 @@ const Worksheet = forwardRef(
             const rowEnd = view.range[2];
             try {
               model.deleteRows(view.sheet, rowStart, rowEnd - rowStart + 1);
-            } catch {
-              setRowColErrorTitle(t("error_dialog.error_deleting_rows"));
+            } catch (e) {
+              rowColError(t("error_dialog.error_deleting_rows"), e);
             }
             setRowHeaderContextMenuOpen(false);
           }}

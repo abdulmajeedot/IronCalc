@@ -1,3 +1,4 @@
+use crate::user_model::protection::Permission;
 use crate::{
     types::{Style, StyleIncludes},
     user_model::history::Diff,
@@ -91,6 +92,7 @@ impl<'a> UserModel<'a> {
     /// If the style is not in the model but is a known built-in, it is first added to the
     /// model's style table, then applied to every cell in the selection with undo support.
     pub fn on_apply_named_style(&mut self, name: &str) -> Result<(), String> {
+        self.guard(self.view.sheet, Permission::FormatCells)?;
         let mut diff_list = Vec::new();
 
         // Ensure the style exists in the model, adding it from builtins if needed.

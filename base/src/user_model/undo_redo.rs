@@ -581,6 +581,14 @@ impl<'a> UserModel<'a> {
                     self.model
                         .update_named_style(new_name, name, old_style, *old_includes)?;
                 }
+                Diff::SetCellProtection {
+                    sheet_id,
+                    old_value,
+                    new_value: _,
+                } => {
+                    self.model
+                        .set_sheet_protection(*sheet_id, (**old_value).clone());
+                }
                 Diff::SetConditionalFormats {
                     sheet,
                     old_value,
@@ -1108,6 +1116,14 @@ impl<'a> UserModel<'a> {
                 } => {
                     self.model
                         .update_named_style(name, new_name, new_style, *new_includes)?;
+                }
+                Diff::SetCellProtection {
+                    sheet_id,
+                    old_value: _,
+                    new_value,
+                } => {
+                    self.model
+                        .set_sheet_protection(*sheet_id, (**new_value).clone());
                 }
                 Diff::SetConditionalFormats {
                     sheet,

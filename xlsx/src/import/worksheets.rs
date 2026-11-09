@@ -1,8 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
+use super::protection::{load_sheet_protection, XfProtection};
 use ironcalc_base::expressions::parser::{
     new_parser_english, static_analysis::add_implicit_intersection, Parser,
 };
+use ironcalc_base::protection::SheetProtection;
 use std::{
     collections::HashMap,
     io::{BufReader, Read},
@@ -1011,6 +1013,8 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     views: &mut Vec<SavedSheetView>,
     validations: &mut Vec<DataValidation>,
     sheet_filters: &mut Vec<LoadedSheetFilter>,
+    sheet_protections: &mut Vec<SheetProtection>,
+    xf_protection: &XfProtection,
 ) -> Result<Worksheet, XlsxError> {
     let sheet_name = &settings.name;
     let sheet_id = settings.id;
@@ -1078,7 +1082,7 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     // pageSetup
     // <pageSetup orientation="portrait" r:id="rId1"/>
 
-    Ok(Worksheet {
+    let loaded = Worksheet {
         dimension,
         cols,
         rows,
@@ -1095,7 +1099,9 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
         show_grid_lines: sheet_view.show_grid_lines,
         conditional_formatting,
         links,
-    })
+    };
+    sheet_protections.extend(load_sheet_protection(ws, &loaded, xf_protection));
+    Ok(loaded)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1110,6 +1116,8 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
     views: &mut Vec<SavedSheetView>,
     validations: &mut Vec<DataValidation>,
     sheet_filters: &mut Vec<LoadedSheetFilter>,
+    sheet_protections: &mut Vec<SheetProtection>,
+    xf_protection: &XfProtection,
 ) -> Result<Vec<Worksheet>, XlsxError> {
     // load comments, tables and hyperlink relationships
     let mut sheet_rels = HashMap::new();
@@ -1170,6 +1178,8 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
                 views,
                 validations,
                 sheet_filters,
+                sheet_protections,
+                xf_protection,
             )?;
             sheets.push(s);
         }

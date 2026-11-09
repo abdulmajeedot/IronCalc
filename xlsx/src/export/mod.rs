@@ -8,6 +8,7 @@ mod doc_props;
 mod dxfs_styles;
 mod escape;
 mod pivot;
+mod protection;
 mod shared_strings;
 mod styles;
 mod styles_util;
@@ -95,7 +96,14 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
     view: &SavedView,
     writer: W,
 ) -> Result<W, XlsxError> {
-    let workbook = &model.workbook;
+    let protected = protection::with_cell_protection(&model.workbook);
+    let workbook = protected
+        .as_ref()
+        .map_or(&model.workbook, |protected| &protected.workbook);
+    let no_formats = std::collections::HashMap::new();
+    let protected_formats = protected
+        .as_ref()
+        .map_or(&no_formats, |protected| &protected.formats);
     let is_visible = |ws: &Worksheet| ws.state == SheetState::Visible;
     // A hidden sheet can't be the active one.
     let selected_sheet = if workbook
@@ -134,7 +142,7 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
     zip.start_file("xl/sharedStrings.xml", options)?;
     zip.write_all(shared_strings::get_shared_strings_xml(workbook).as_bytes())?;
     zip.start_file("xl/styles.xml", options)?;
-    zip.write_all(styles::get_styles_xml(workbook).as_bytes())?;
+    zip.write_all(styles::get_styles_xml(workbook, protected_formats).as_bytes())?;
     zip.start_file("xl/workbook.xml", options)?;
     zip.write_all(
         workbook::get_workbook_xml(workbook, selected_sheet, &pivots, &extras).as_bytes(),
@@ -222,6 +230,7 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
                     .iter()
                     .find(|v| v.sheet_id == worksheet.sheet_id),
                 &tables::get_sheet_filter_xml(model, worksheet),
+                &protection::get_sheet_protection_xml(workbook, worksheet),
                 &data_validation::get_data_validations_xml(workbook, worksheet),
                 &sheet_extras.parts_xml(rel_base),
                 &sheet_extras.ext_xml(rel_base),

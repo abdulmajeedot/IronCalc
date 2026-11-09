@@ -232,6 +232,18 @@ impl<'a> UserModel<'a> {
             width: source_last_column - source_first_column + 1,
             height: source_last_row - source_first_row + 1,
         };
+        self.guard_cells(
+            sheet,
+            (
+                selected_row,
+                selected_column,
+                selected_row + target_area.height - 1,
+                selected_column + target_area.width - 1,
+            ),
+        )?;
+        if is_cut {
+            self.guard_cells(source_sheet, source_range)?;
+        }
 
         // The merges of the copied area, captured before the containment
         // step below can remove target merges: when the paste overlaps its
@@ -424,6 +436,13 @@ impl<'a> UserModel<'a> {
             source_last_row,
             source_last_column,
         );
+        diff_list.extend(self.paste_cell_protection(
+            source_sheet,
+            source_range,
+            sheet,
+            (selected_row, selected_column),
+            is_cut,
+        )?);
         diff_list.extend(self.place_copied_validations(
             sheet,
             (
@@ -797,6 +816,15 @@ impl<'a> UserModel<'a> {
 
         // Merged cells in the target are replaced by the paste (or reject
         // it); plain text carries no merges, so contained ones just go
+        self.guard_cells(
+            sheet,
+            (
+                area.row,
+                area.column,
+                area.row + paste_area.height - 1,
+                area.column + paste_area.width - 1,
+            ),
+        )?;
         let mut diff_list = Vec::new();
         self.remove_merges_replaced_by_paste(&paste_area, &[], &mut diff_list)?;
 

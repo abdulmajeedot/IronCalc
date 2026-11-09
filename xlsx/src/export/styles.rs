@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use super::protection::get_format_protection_xml;
 use ironcalc_base::types::{Color, Styles, Workbook};
 
 use crate::export::{
@@ -165,10 +168,19 @@ fn get_cell_style_xfs_xml(styles: &Styles) -> String {
     )
 }
 
-fn get_cell_xfs_xml(styles: &Styles) -> String {
+fn get_cell_xfs_xml(styles: &Styles, protected: &HashMap<i32, (bool, bool)>) -> String {
     let cell_xfs = &styles.cell_xfs;
     let mut cell_xfs_str: Vec<String> = vec![];
-    for cell_xf in cell_xfs {
+    for (index, cell_xf) in cell_xfs.iter().enumerate() {
+        let protection = protected.get(&(index as i32));
+        let protection_xml = protection.map_or(String::new(), |(locked, hidden)| {
+            get_format_protection_xml(*locked, *hidden)
+        });
+        let apply_protection_str = if protection.is_some() {
+            r#" applyProtection="1""#
+        } else {
+            ""
+        };
         let xf_id = cell_xf.xf_id;
         let border_id = cell_xf.border_id;
         let fill_id = cell_xf.fill_id;
@@ -215,11 +227,14 @@ fn get_cell_xfs_xml(styles: &Styles) -> String {
                 {apply_font_str}\
                 {apply_fill_str}\
                 {apply_number_format_str}\
-                {apply_border_str}"
+                {apply_border_str}\
+                {apply_protection_str}"
         );
         if let Some(alignment) = &cell_xf.alignment {
             let alignment = get_alignment(alignment);
-            cell_xfs_str.push(format!("<xf {properties}>{alignment}</xf>"));
+            cell_xfs_str.push(format!("<xf {properties}>{alignment}{protection_xml}</xf>"));
+        } else if protection.is_some() {
+            cell_xfs_str.push(format!("<xf {properties}>{protection_xml}</xf>"));
         } else {
             cell_xfs_str.push(format!("<xf {properties}/>"));
         }
@@ -251,14 +266,14 @@ fn get_cell_styles_xml(styles: &Styles) -> String {
     )
 }
 
-pub(crate) fn get_styles_xml(model: &Workbook) -> String {
+pub(crate) fn get_styles_xml(model: &Workbook, protected: &HashMap<i32, (bool, bool)>) -> String {
     let styles = &model.styles;
     let fonts = get_fonts_xml(styles);
     let fills = get_fills_xml(styles);
     let borders = get_borders_xml(styles);
     let number_formats = get_cell_number_formats_xml(styles);
     let cell_style_xfs = get_cell_style_xfs_xml(styles);
-    let cell_xfs = get_cell_xfs_xml(styles);
+    let cell_xfs = get_cell_xfs_xml(styles, protected);
     let cell_styles = get_cell_styles_xml(styles);
     let dxfs = get_dxfs_xml(styles);
 

@@ -15,6 +15,7 @@ import type { MergeCellsOperation } from "../Toolbar/Toolbar";
  * actions are ignored when the widget is not editable (`canEdit` is false).
  */
 export interface WorkbookActions {
+  showProtectedMessage: () => void;
   refresh: () => void;
   undo: () => void;
   redo: () => void;
