@@ -10,6 +10,7 @@ mod common;
 mod conditional_formatting;
 mod data_validation;
 pub(crate) mod history;
+mod insert_cells;
 mod links;
 mod merged_cells;
 mod named_cell_styles;

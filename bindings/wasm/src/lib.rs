@@ -1284,6 +1284,45 @@ impl Model {
             .map_err(|e| to_js_error(e.to_string()))
     }
 
+    /// Inserts blank cells over an area, moving what is there down or right.
+    #[wasm_bindgen(js_name = "insertCells")]
+    pub fn insert_cells(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+        down: bool,
+    ) -> Result<(), JsError> {
+        self.model
+            .insert_cells(sheet, from_js(area)?, down)
+            .map_err(to_js_error)
+    }
+
+    /// Inserts copied or cut cells at the selection.
+    #[wasm_bindgen(js_name = "insertCopiedCells")]
+    pub fn insert_copied_cells(
+        &mut self,
+        source_sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "[number, number, number, number]")]
+        source_range: JsValue,
+        #[wasm_bindgen(unchecked_param_type = "ClipboardData")] clipboard: JsValue,
+        is_cut: bool,
+        #[wasm_bindgen(unchecked_param_type = "InsertCopiedMode")] mode: JsValue,
+        count: i32,
+    ) -> Result<(), JsError> {
+        let source_range: (i32, i32, i32, i32) = from_js(source_range)?;
+        let clipboard: ClipboardData = from_js(clipboard)?;
+        self.model
+            .insert_copied_cells(
+                source_sheet,
+                source_range,
+                &clipboard,
+                is_cut,
+                from_js(mode)?,
+                count,
+            )
+            .map_err(to_js_error)
+    }
+
     #[wasm_bindgen(js_name = "pasteCsvText")]
     pub fn paste_csv_string(
         &mut self,
@@ -1649,6 +1688,33 @@ impl Model {
         self.model
             .set_table_total_function(name, column, function)
             .map_err(to_js_error)
+    }
+
+    /// The filter on a plain range of a sheet, if there is one.
+    #[wasm_bindgen(
+        js_name = "getSheetFilter",
+        unchecked_return_type = "SheetFilterInfo | null"
+    )]
+    pub fn get_sheet_filter(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_sheet_filter(sheet))
+    }
+
+    /// Turns a sheet's filter on or off.
+    #[wasm_bindgen(js_name = "toggleSheetFilter")]
+    pub fn toggle_sheet_filter(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+    ) -> Result<(), JsError> {
+        self.model
+            .toggle_sheet_filter(sheet, from_js(area)?)
+            .map_err(to_js_error)
+    }
+
+    /// Applies a table's or a sheet's filter again.
+    #[wasm_bindgen(js_name = "reapplyFilters")]
+    pub fn reapply_filters(&mut self, name: &str) -> Result<(), JsError> {
+        self.model.reapply_filters(name).map_err(to_js_error)
     }
 
     #[wasm_bindgen(js_name = "setTableFilter")]

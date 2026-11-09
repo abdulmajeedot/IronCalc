@@ -244,6 +244,15 @@ impl<'a> UserModel<'a> {
                     self.model.delete_rows(*sheet, *row, *count)?;
                     needs_evaluation = true;
                 }
+                Diff::ShiftCells {
+                    sheet,
+                    area,
+                    down,
+                    insert,
+                } => {
+                    self.model.shift_cells(*sheet, *area, *down, !*insert)?;
+                    needs_evaluation = true;
+                }
                 Diff::DeleteRows {
                     sheet,
                     row,
@@ -833,6 +842,15 @@ impl<'a> UserModel<'a> {
                 }
                 Diff::InsertRows { sheet, row, count } => {
                     self.model.insert_rows(*sheet, *row, *count)?;
+                    needs_evaluation = true;
+                }
+                Diff::ShiftCells {
+                    sheet,
+                    area,
+                    down,
+                    insert,
+                } => {
+                    self.model.shift_cells(*sheet, *area, *down, *insert)?;
                     needs_evaluation = true;
                 }
                 Diff::DeleteRows {

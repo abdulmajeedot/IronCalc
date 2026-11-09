@@ -3,8 +3,8 @@
 use crate::conditional_formatting::parse_sqref;
 use crate::constants::{LAST_COLUMN, LAST_ROW};
 use crate::data_validation::{
-    literal_list, sqref_anchor, sqref_of, DataValidation, ValidationFailure, ValidationKind,
-    ValidationSettings,
+    literal_list, sqref_anchor, sqref_of, subtract_range, DataValidation, ValidationFailure,
+    ValidationKind, ValidationSettings,
 };
 use crate::expressions::parser::stringify::{to_english_string, to_rc_format};
 use crate::expressions::parser::Node;
@@ -20,30 +20,6 @@ use super::{common::UserModel, history::Diff};
 const LIST_LIMIT: usize = 255;
 
 type Range = (i32, i32, i32, i32);
-
-/// What is left of `range` once `hole` is cut out of it.
-fn subtract(range: Range, hole: Range) -> Vec<Range> {
-    let (r1, c1, r2, c2) = range;
-    let (h1, k1, h2, k2) = hole;
-    if h1 > r2 || h2 < r1 || k1 > c2 || k2 < c1 {
-        return vec![range];
-    }
-    let mut pieces = Vec::new();
-    if r1 < h1 {
-        pieces.push((r1, c1, h1 - 1, c2));
-    }
-    let (top, bottom) = (r1.max(h1), r2.min(h2));
-    if c1 < k1 {
-        pieces.push((top, c1, bottom, k1 - 1));
-    }
-    if k2 < c2 {
-        pieces.push((top, k2 + 1, bottom, c2));
-    }
-    if h2 < r2 {
-        pieces.push((h2 + 1, c1, r2, c2));
-    }
-    pieces
-}
 
 /// Joins ranges that touch, so a rule stays short after many single-cell pastes.
 fn merge_ranges(mut ranges: Vec<Range>) -> Vec<Range> {
@@ -290,7 +266,7 @@ impl UserModel<'_> {
             let ranges = parse_sqref(&rule.sqref);
             let pieces: Vec<Range> = ranges
                 .iter()
-                .flat_map(|range| subtract(*range, hole))
+                .flat_map(|range| subtract_range(*range, hole))
                 .collect();
             if pieces.is_empty() {
                 continue;

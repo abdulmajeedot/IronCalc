@@ -7,8 +7,9 @@ use std::io::{Read, Seek};
 
 use ironcalc_base::pivot::{PivotField, PivotTable, BLANK_ITEM_LABEL};
 use ironcalc_base::table::{
-    Slicer, SlicerPivot, SlicerPlacement, SlicerSource, TableColumnFilter, TableFilterOperator,
-    TableFilterRule, TableFilterState, TableSort, BLANK_FILTER_LABEL, DEFAULT_SLICER_STYLE,
+    sheet_filter_name, SheetFilter, Slicer, SlicerPivot, SlicerPlacement, SlicerSource,
+    TableColumnFilter, TableFilterOperator, TableFilterRule, TableFilterState, TableSort,
+    BLANK_FILTER_LABEL, DEFAULT_SLICER_STYLE,
 };
 use ironcalc_base::types::{Table, Worksheet};
 
@@ -176,6 +177,60 @@ fn read_filter_state(document: &XmlNode, table: &Table) -> Option<TableFilterSta
         columns,
         sort,
     })
+}
+
+/// A sheet's filter and what it filters by.
+pub(super) type LoadedSheetFilter = (SheetFilter, Option<TableFilterState>);
+
+/// The `<autoFilter>` of a worksheet, as opposed to a table's.
+pub(super) fn load_sheet_filter(ws: &XmlNode, sheet_id: u32) -> Option<LoadedSheetFilter> {
+    use ironcalc_base::expressions::utils::{number_to_column, parse_reference_a1};
+    use ironcalc_base::pivot::PivotArea;
+
+    let filter = ws.child("autoFilter")?;
+    let reference = filter.attribute("ref")?;
+    let (first, last) = reference.split_once(':').unwrap_or((reference, reference));
+    let (first, last) = (parse_reference_a1(first)?, parse_reference_a1(last)?);
+    let area = PivotArea {
+        first_row: first.row,
+        first_column: first.column,
+        last_row: last.row,
+        last_column: last.column,
+    };
+    let name = sheet_filter_name(sheet_id);
+    let mut columns = Vec::new();
+    for column in filter.children().filter(|n| n.has_tag_name("filterColumn")) {
+        let Some(rule) = read_filter_rule(column) else {
+            continue;
+        };
+        let Some(offset) = column
+            .attribute("colId")
+            .and_then(|id| id.parse::<i32>().ok())
+        else {
+            continue;
+        };
+        if let Some(column) = number_to_column(area.first_column + offset) {
+            columns.push(TableColumnFilter { column, rule });
+        }
+    }
+    let sort = ws
+        .child("sortState")
+        .or_else(|| filter.child("sortState"))
+        .and_then(|state| state.child("sortCondition"))
+        .and_then(|condition| {
+            let reference = condition.attribute("ref")?;
+            let cell = parse_reference_a1(reference.split(':').next()?)?;
+            Some(TableSort {
+                column: number_to_column(cell.column)?,
+                descending: is_on(condition, "descending", false),
+            })
+        });
+    let state = (!columns.is_empty() || sort.is_some()).then_some(TableFilterState {
+        table: name,
+        columns,
+        sort,
+    });
+    Some((SheetFilter { sheet_id, area }, state))
 }
 
 fn number_in(node: &XmlNode, name: &str) -> Option<f64> {

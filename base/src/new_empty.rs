@@ -383,6 +383,36 @@ impl<'a> Model<'a> {
             })
             .collect();
         self.workbook.data_validations.extend(copies);
+        let source_filter = crate::table::sheet_filter_name(source_id);
+        let new_filter = crate::table::sheet_filter_name(new_sheet_id);
+        self.workbook
+            .sheet_filters
+            .retain(|filter| filter.sheet_id != new_sheet_id);
+        self.workbook
+            .table_filters
+            .retain(|s| s.table != new_filter);
+        let area = self
+            .workbook
+            .sheet_filters
+            .iter()
+            .find(|filter| filter.sheet_id == source_id)
+            .map(|filter| filter.area);
+        if let Some(area) = area {
+            self.workbook.sheet_filters.push(crate::table::SheetFilter {
+                sheet_id: new_sheet_id,
+                area,
+            });
+        }
+        let state = self
+            .workbook
+            .table_filters
+            .iter()
+            .find(|s| s.table == source_filter)
+            .cloned();
+        if let Some(mut state) = state {
+            state.table = new_filter;
+            self.workbook.table_filters.push(state);
+        }
 
         // Insert the copy right after the source sheet.
         let new_index = source_index as usize + 1;
@@ -685,6 +715,7 @@ impl<'a> Model<'a> {
             table_filters: vec![],
             saved_view: Default::default(),
             data_validations: vec![],
+            sheet_filters: vec![],
             slicers: vec![],
         };
         let parsed_formulas = Vec::new();

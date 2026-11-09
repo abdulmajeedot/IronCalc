@@ -32,6 +32,7 @@ import {
   type SlicerLayerHandle,
 } from "../RightDrawer/Table/SlicerLayer";
 import {
+  BLANK_LABEL,
   type TableDialogState,
   type TableMenuState,
   TableMenus,
@@ -56,6 +57,7 @@ import { CellNoteEditor, CellNotePopup, placeCellNote } from "./CellNote";
 import CellContextMenu from "./ContextMenus/Cell";
 import ColumnHeaderContextMenu from "./ContextMenus/ColumnHeader";
 import RowHeaderContextMenu from "./ContextMenus/RowHeader";
+import { InsertPasteDialog } from "./InsertPasteDialog";
 import LinkTooltip from "./LinkTooltip";
 import usePointer from "./usePointer";
 import "./worksheet.css";
@@ -401,6 +403,88 @@ const Worksheet = forwardRef(
           )
         : undefined;
 
+    const { t } = useTranslation();
+    const copiedCells = workbookState.getCopiedCells();
+    const insertCopiedLabel = copiedCells
+      ? t(
+          copiedCells.type === "cut"
+            ? "context_menu.cell.insert_cut_cells"
+            : "context_menu.cell.insert_copied_cells",
+        )
+      : null;
+    const selectionSize = () => {
+      const [a, b, c, d] = model.getSelectedView().range;
+      return { height: Math.abs(c - a) + 1, width: Math.abs(d - b) + 1 };
+    };
+    const [insertPasteDown, setInsertPasteDown] = useState<boolean | null>(
+      null,
+    );
+    const startInsertCopied = (): void => {
+      if (!copiedCells) {
+        return;
+      }
+      if (copiedCells.wholeRows > 0) {
+        actions.insertCopiedCells("rows");
+        return;
+      }
+      if (copiedCells.wholeColumns > 0) {
+        actions.insertCopiedCells("columns");
+        return;
+      }
+      const [r1, c1, r2, c2] = copiedCells.area;
+      const view = model.getSelectedView();
+      const row = Math.min(view.range[0], view.range[2]);
+      const column = Math.min(view.range[1], view.range[3]);
+      // Cut cells moved along their own column or row know which way to go
+      if (copiedCells.type === "cut" && copiedCells.sheet === view.sheet) {
+        if (column === c1) {
+          actions.insertCopiedCells("down");
+          return;
+        }
+        if (row === r1) {
+          actions.insertCopiedCells("right");
+          return;
+        }
+      }
+      setInsertPasteDown(c2 - c1 >= r2 - r1);
+    };
+
+    const sheetFilterActions = () => {
+      if (!cellContextMenuOpen) {
+        return undefined;
+      }
+      const { sheet, row, column } = model.getSelectedView();
+      const filter = model.getSheetFilter(sheet);
+      if (
+        !filter ||
+        row <= filter.area.first_row ||
+        row > filter.area.last_row ||
+        column < filter.area.first_column ||
+        column > filter.area.last_column
+      ) {
+        return undefined;
+      }
+      const value = model.getFormattedCellValue(sheet, row, column);
+      const finish = (action: () => void): void => {
+        setCellContextMenuOpen(false);
+        action();
+        refresh();
+      };
+      return {
+        value,
+        filtered: filter.filtered,
+        onFilterByValue: () =>
+          finish(() =>
+            model.setTableFilter(filter.name, columnNameFromNumber(column), {
+              type: "values",
+              visible: [value === "" ? BLANK_LABEL : value],
+            }),
+          ),
+        onClear: () => finish(() => model.clearTableFilters(filter.name)),
+        onReapply: () => finish(() => model.reapplyFilters(filter.name)),
+      };
+    };
+
     const canEditRef = useRef(canEdit);
     canEditRef.current = canEdit;
     tableMarkerAction.current = (marker, anchor) => {
@@ -438,7 +522,6 @@ const Worksheet = forwardRef(
         setRowColErrorTitle(t("pivot_table.replace_blocked"));
       }
     };
-    const { t } = useTranslation();
     // Re-renders (and so re-creates the canvas, below) on window resizes
     useWindowSize();
 
@@ -1111,6 +1194,16 @@ const Worksheet = forwardRef(
             ))}
           </Menu>
         ) : null}
+        {insertPasteDown !== null ? (
+          <InsertPasteDialog
+            defaultDown={insertPasteDown}
+            onClose={() => setInsertPasteDown(null)}
+            onConfirm={(down) => {
+              setInsertPasteDown(null);
+              actions.insertCopiedCells(down ? "down" : "right");
+            }}
+          />
+        ) : null}
         <TableMenus
           model={model}
           state={tableMenu}
@@ -1148,6 +1241,22 @@ const Worksheet = forwardRef(
           onCut={actions.cut}
           onCopy={actions.copy}
           onPaste={actions.paste}
+          filterActions={sheetFilterActions()}
+          insertCopiedLabel={insertCopiedLabel}
+          onInsertCopied={(): void => {
+            setCellContextMenuOpen(false);
+            startInsertCopied();
+          }}
+          rowCount={selectionSize().height}
+          columnCount={selectionSize().width}
+          onShiftCellsRight={(): void => {
+            setCellContextMenuOpen(false);
+            actions.insertCells(false);
+          }}
+          onShiftCellsDown={(): void => {
+            setCellContextMenuOpen(false);
+            actions.insertCells(true);
+          }}
           hasNote={Boolean(selectedNote)}
           onEditNote={(): void => {
             setCellContextMenuOpen(false);
@@ -1195,6 +1304,13 @@ const Worksheet = forwardRef(
           }}
         />
         <ColumnHeaderContextMenu
+          insertCopiedLabel={
+            copiedCells?.wholeColumns ? insertCopiedLabel : null
+          }
+          onInsertCopied={(): void => {
+            setColHeaderContextMenuOpen(false);
+            startInsertCopied();
+          }}
           open={colHeaderContextMenuOpen}
           onClose={() => setColHeaderContextMenuOpen(false)}
           anchorPosition={
@@ -1315,6 +1431,11 @@ const Worksheet = forwardRef(
           })()}
         />
         <RowHeaderContextMenu
+          insertCopiedLabel={copiedCells?.wholeRows ? insertCopiedLabel : null}
+          onInsertCopied={(): void => {
+            setRowHeaderContextMenuOpen(false);
+            startInsertCopied();
+          }}
           open={rowHeaderContextMenuOpen}
           onClose={() => setRowHeaderContextMenuOpen(false)}
           anchorPosition={

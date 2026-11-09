@@ -317,3 +317,11 @@
   outline: none;
   resize: both;
 }
+
+.ic-insert-paste-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  cursor: pointer;
+}

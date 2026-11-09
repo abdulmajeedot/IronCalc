@@ -11,8 +11,12 @@ use std::collections::HashSet;
 use bitcode::{Decode, Encode};
 use serde::{Deserialize, Serialize};
 
+use crate::actions::displace_cf_col;
 use crate::cell::CellValue;
+use crate::data_validation::displaced_range;
 use crate::expressions::parser::parse_range;
+use crate::expressions::parser::stringify::DisplaceData;
+use crate::expressions::utils::column_to_number;
 use crate::expressions::utils::number_to_column;
 use crate::model::Model;
 use crate::pivot::{wildcard_match, PivotArea};
@@ -109,6 +113,8 @@ pub struct TableStyleSwatch {
 pub struct TableMarker {
     pub table: String,
     pub column: String,
+    /// What the user calls the column
+    pub label: String,
     pub row: i32,
     pub col: i32,
     pub filtered: bool,
@@ -252,6 +258,51 @@ pub fn table_data_rows(table: &Table, area: &PivotArea) -> (i32, i32) {
         area.first_row + table.header_row_count as i32,
         area.last_row - table.totals_row_count as i32,
     )
+}
+
+/// Filter names that start with this belong to a sheet, not to a table. A
+/// table's name can't contain `#`.
+const SHEET_FILTER_PREFIX: &str = "#sheet:";
+
+/// The filter buttons on a plain range of a sheet.
+#[derive(Serialize, Deserialize, Encode, Decode, Debug, PartialEq, Eq, Clone)]
+pub struct SheetFilter {
+    /// The id of the sheet
+    pub sheet_id: u32,
+    /// The range, its first row being the one with the buttons
+    pub area: PivotArea,
+}
+
+/// The name a sheet's filter goes by in the filter calls.
+pub fn sheet_filter_name(sheet_id: u32) -> String {
+    format!("{SHEET_FILTER_PREFIX}{sheet_id}")
+}
+
+/// What a sheet's filter says about itself.
+#[derive(Serialize, Debug, PartialEq, Eq, Clone)]
+pub struct SheetFilterInfo {
+    /// The name to use in the filter calls
+    pub name: String,
+    /// The range, its first row being the one with the buttons
+    pub area: PivotArea,
+    /// Whether any column is being filtered
+    pub filtered: bool,
+}
+
+/// What a filter works on, be it a table's or a sheet's.
+pub(crate) struct FilterScope {
+    pub(crate) sheet: u32,
+    pub(crate) area: PivotArea,
+    pub(crate) first: i32,
+    pub(crate) last: i32,
+    /// The name of each column, in order. A sheet's columns go by their letter.
+    pub(crate) columns: Vec<String>,
+}
+
+impl FilterScope {
+    pub(crate) fn index(&self, column: &str) -> Option<usize> {
+        self.columns.iter().position(|c| same_name(c, column))
+    }
 }
 
 fn same_name(a: &str, b: &str) -> bool {
@@ -1085,6 +1136,164 @@ impl Model<'_> {
         }
     }
 
+    /// The range of a sheet's filter, with the rows typed right below it.
+    pub(crate) fn sheet_filter_area(&self, filter: &SheetFilter) -> Result<PivotArea, String> {
+        let worksheet = self
+            .workbook
+            .worksheets
+            .iter()
+            .find(|worksheet| worksheet.sheet_id == filter.sheet_id)
+            .ok_or("Sheet not found")?;
+        let mut area = filter.area;
+        let filled = |row: i32| {
+            (area.first_column..=area.last_column).any(|column| {
+                worksheet
+                    .cell(row, column)
+                    .is_some_and(|cell| !matches!(cell.as_ref(), Cell::EmptyCell { .. }))
+            })
+        };
+        let mut last_row = area.last_row;
+        while last_row < crate::constants::LAST_ROW && filled(last_row + 1) {
+            last_row += 1;
+        }
+        area.last_row = last_row;
+        Ok(area)
+    }
+
+    /// The range a sheet's filter covers now.
+    pub fn sheet_filter_extent(&self, filter: &SheetFilter) -> Result<PivotArea, String> {
+        self.sheet_filter_area(filter)
+    }
+
+    pub(crate) fn sheet_filter_of(&self, sheet: u32) -> Option<&SheetFilter> {
+        let sheet_id = self.workbook.worksheets.get(sheet as usize)?.sheet_id;
+        self.workbook
+            .sheet_filters
+            .iter()
+            .find(|filter| filter.sheet_id == sheet_id)
+    }
+
+    /// What the filter of that name works on.
+    pub(crate) fn filter_scope(&self, name: &str) -> Result<FilterScope, String> {
+        if let Some(id) = name.strip_prefix(SHEET_FILTER_PREFIX) {
+            let filter = self
+                .workbook
+                .sheet_filters
+                .iter()
+                .find(|filter| id.parse() == Ok(filter.sheet_id))
+                .ok_or("This sheet has no filter")?;
+            let sheet = self
+                .workbook
+                .worksheets
+                .iter()
+                .position(|worksheet| worksheet.sheet_id == filter.sheet_id)
+                .ok_or("Sheet not found")? as u32;
+            let area = self.sheet_filter_area(filter)?;
+            return Ok(FilterScope {
+                sheet,
+                area,
+                first: area.first_row + 1,
+                last: area.last_row,
+                columns: (area.first_column..=area.last_column)
+                    .filter_map(number_to_column)
+                    .collect(),
+            });
+        }
+        let table = self
+            .workbook
+            .tables
+            .get(name)
+            .ok_or_else(|| format!("Table not found: {name}"))?;
+        let area = table_area(table).ok_or("Invalid table range")?;
+        let sheet = self.table_sheet(table).ok_or("Sheet not found")?;
+        let (first, last) = table_data_rows(table, &area);
+        Ok(FilterScope {
+            sheet,
+            area,
+            first,
+            last,
+            columns: table.columns.iter().map(|c| c.name.clone()).collect(),
+        })
+    }
+
+    /// Keeps a sheet's filter on its data when rows or columns move.
+    pub(crate) fn displace_sheet_filters(&mut self, sheet: u32, data: &DisplaceData) {
+        let Some(sheet_id) = self
+            .workbook
+            .worksheets
+            .get(sheet as usize)
+            .map(|w| w.sheet_id)
+        else {
+            return;
+        };
+        let Some(index) = self
+            .workbook
+            .sheet_filters
+            .iter()
+            .position(|filter| filter.sheet_id == sheet_id)
+        else {
+            return;
+        };
+        let name = sheet_filter_name(sheet_id);
+        let area = self.workbook.sheet_filters[index].area;
+        let header_deleted = matches!(
+            data,
+            DisplaceData::Row { row, delta, .. }
+                if *delta < 0 && (*row..*row - *delta).contains(&area.first_row)
+        );
+        let moved = displaced_range(
+            (
+                area.first_row,
+                area.first_column,
+                area.last_row,
+                area.last_column,
+            ),
+            data,
+            sheet,
+        );
+        let Some((first_row, first_column, last_row, last_column)) =
+            moved.filter(|_| !header_deleted)
+        else {
+            self.workbook.sheet_filters.remove(index);
+            self.workbook.table_filters.retain(|s| s.table != name);
+            return;
+        };
+        self.workbook.sheet_filters[index].area = PivotArea {
+            first_row,
+            first_column,
+            last_row,
+            last_column,
+        };
+        // The columns go by their letter
+        let moved_key = |key: &str| {
+            let column = column_to_number(key).ok()?;
+            number_to_column(displace_cf_col(column, data, sheet)?)
+        };
+        for state in self
+            .workbook
+            .table_filters
+            .iter_mut()
+            .filter(|s| s.table == name)
+        {
+            state
+                .columns
+                .retain_mut(|filter| match moved_key(&filter.column) {
+                    Some(key) => {
+                        filter.column = key;
+                        true
+                    }
+                    None => false,
+                });
+            state.sort = state.sort.take().and_then(|mut sort| {
+                sort.column = moved_key(&sort.column)?;
+                Some(sort)
+            });
+        }
+        self.workbook
+            .table_filters
+            .retain(|s| s.table != name || !s.columns.is_empty() || s.sort.is_some());
+    }
+
     /// Reads the cells of one table column, in row order.
     pub(crate) fn table_filter_cells(
         &self,
@@ -1124,22 +1333,16 @@ impl Model<'_> {
 
     /// Per filtered column, which rows of the table's data its filter keeps.
     fn table_filter_masks(&self, name: &str) -> Result<Vec<(String, Vec<bool>)>, String> {
-        let table = self
-            .workbook
-            .tables
-            .get(name)
-            .ok_or_else(|| format!("Table not found: {name}"))?;
-        let area = table_area(table).ok_or("Invalid table range")?;
-        let sheet = self.table_sheet(table).ok_or("Sheet not found")?;
-        let (first, last) = table_data_rows(table, &area);
+        let scope = self.filter_scope(name)?;
         let mut masks = Vec::new();
         if let Some(state) = self.table_filter_state(name) {
             for filter in &state.columns {
-                let Some(index) = table_column_index(table, &filter.column) else {
+                let Some(index) = scope.index(&filter.column) else {
                     continue;
                 };
-                let column = area.first_column + index as i32;
-                let cells = self.table_filter_cells(sheet, column, first, last)?;
+                let column = scope.area.first_column + index as i32;
+                let cells =
+                    self.table_filter_cells(scope.sheet, column, scope.first, scope.last)?;
                 masks.push((filter.column.clone(), rule_keeps(&filter.rule, &cells)));
             }
         }
@@ -1148,15 +1351,9 @@ impl Model<'_> {
 
     /// `(row, hidden)` for each row of a table's data under its current filters.
     pub fn table_row_visibility(&self, name: &str) -> Result<Vec<(i32, bool)>, String> {
-        let table = self
-            .workbook
-            .tables
-            .get(name)
-            .ok_or_else(|| format!("Table not found: {name}"))?;
-        let area = table_area(table).ok_or("Invalid table range")?;
-        let (first, last) = table_data_rows(table, &area);
+        let scope = self.filter_scope(name)?;
         let masks = self.table_filter_masks(name)?;
-        Ok((first..=last)
+        Ok((scope.first..=scope.last)
             .enumerate()
             .map(|(offset, row)| (row, masks.iter().any(|(_, m)| !m[offset])))
             .collect())
@@ -1168,18 +1365,16 @@ impl Model<'_> {
         name: &str,
         column_name: &str,
     ) -> Result<Vec<TableFilterItem>, String> {
-        let table = self
-            .workbook
-            .tables
-            .get(name)
-            .ok_or_else(|| format!("Table not found: {name}"))?;
-        let area = table_area(table).ok_or("Invalid table range")?;
-        let sheet = self.table_sheet(table).ok_or("Sheet not found")?;
-        let index = table_column_index(table, column_name)
+        let scope = self.filter_scope(name)?;
+        let index = scope
+            .index(column_name)
             .ok_or_else(|| format!("Column not found: {column_name}"))?;
-        let (first, last) = table_data_rows(table, &area);
-        let cells =
-            self.table_filter_cells(sheet, area.first_column + index as i32, first, last)?;
+        let cells = self.table_filter_cells(
+            scope.sheet,
+            scope.area.first_column + index as i32,
+            scope.first,
+            scope.last,
+        )?;
         let masks = self.table_filter_masks(name)?;
         let own = masks
             .iter()

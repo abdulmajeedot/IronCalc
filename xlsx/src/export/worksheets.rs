@@ -227,6 +227,7 @@ pub(crate) fn get_worksheet_xml(
     dimension: &str,
     is_sheet_selected: bool,
     view: Option<&SavedSheetView>,
+    sheet_filter: &str,
     data_validations: &str,
     extra_parts: &str,
     extra_ext: &str,
@@ -763,6 +764,7 @@ pub(crate) fn get_worksheet_xml(
   <sheetData>\
   {sheet_data}\
   </sheetData>\
+  {sheet_filter}\
   {merge_cells_section}\
   {cf_sections}\
   {data_validations}\

@@ -305,6 +305,13 @@ pub(crate) enum Diff {
         old_value: Box<Option<Link>>,
         new_value: Box<Option<Link>>,
     },
+    /// Cells moved down or right to make room for `area`, or back again.
+    ShiftCells {
+        sheet: u32,
+        area: (i32, i32, i32, i32),
+        down: bool,
+        insert: bool,
+    },
     SetDataValidations {
         old_value: Vec<crate::data_validation::DataValidation>,
         new_value: Vec<crate::data_validation::DataValidation>,

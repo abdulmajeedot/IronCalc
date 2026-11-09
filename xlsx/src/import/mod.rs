@@ -111,6 +111,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     let mut styles = load_styles(&mut archive, &theme)?;
     let mut sheet_views = Vec::new();
     let mut data_validations = Vec::new();
+    let mut sheet_filter_list = Vec::new();
     let worksheets = load_sheets(
         &mut archive,
         &rels,
@@ -121,6 +122,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         &mut styles.dxfs,
         &mut sheet_views,
         &mut data_validations,
+        &mut sheet_filter_list,
     )?;
     // `activeTab` counts chart sheets too, which are not loaded.
     let active_sheet_id = workbook
@@ -143,13 +145,18 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         dn.formula = reparse_formula_hack(&dn.formula, &worksheet_names)?;
     }
     let mut pivot_tables = pivot::load_pivots(&mut archive, &rels, &worksheets, &tables);
-    let (table_filters, slicers) = slicers::load_filters_and_slicers(
+    let (mut table_filters, slicers) = slicers::load_filters_and_slicers(
         &mut archive,
         &rels,
         &worksheets,
         &tables,
         &mut pivot_tables,
     );
+    let mut sheet_filters = Vec::with_capacity(sheet_filter_list.len());
+    for (filter, state) in sheet_filter_list {
+        sheet_filters.push(filter);
+        table_filters.extend(state);
+    }
     let metadata = match load_metadata(&mut archive) {
         Ok(metadata) => metadata,
         Err(_) => {
@@ -182,6 +189,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         slicers,
         saved_view,
         data_validations,
+        sheet_filters,
     };
     pivot::paint_imported_pivots(&mut workbook);
     Ok(workbook)

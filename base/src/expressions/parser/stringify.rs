@@ -31,6 +31,22 @@ pub enum DisplaceData {
         column: i32,
         delta: i32,
     },
+    /// A block of columns moves down from `row`, leaving the rest in place.
+    BlockDown {
+        sheet: u32,
+        row: i32,
+        first_column: i32,
+        last_column: i32,
+        delta: i32,
+    },
+    /// A block of rows moves right from `column`, leaving the rest in place.
+    BlockRight {
+        sheet: u32,
+        column: i32,
+        first_row: i32,
+        last_row: i32,
+        delta: i32,
+    },
     RowMove {
         sheet: u32,
         row: i32,
@@ -286,6 +302,46 @@ pub(crate) fn displace_coordinates(
                         column += *delta;
                     }
                 } else if &column >= displace_column {
+                    column += *delta;
+                }
+            }
+        }
+        DisplaceData::BlockDown {
+            sheet,
+            row: at,
+            first_column,
+            last_column,
+            delta,
+        } => {
+            if sheet_index == *sheet && (*first_column..=*last_column).contains(&column) {
+                if *delta < 0 {
+                    if row >= *at {
+                        if row < *at - *delta {
+                            return None;
+                        }
+                        row += *delta;
+                    }
+                } else if row >= *at {
+                    row += *delta;
+                }
+            }
+        }
+        DisplaceData::BlockRight {
+            sheet,
+            column: at,
+            first_row,
+            last_row,
+            delta,
+        } => {
+            if sheet_index == *sheet && (*first_row..=*last_row).contains(&row) {
+                if *delta < 0 {
+                    if column >= *at {
+                        if column < *at - *delta {
+                            return None;
+                        }
+                        column += *delta;
+                    }
+                } else if column >= *at {
                     column += *delta;
                 }
             }

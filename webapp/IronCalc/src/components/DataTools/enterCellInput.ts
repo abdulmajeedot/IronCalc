@@ -13,6 +13,7 @@ export function enterCellInput(
   text: string,
 ): void {
   model.setUserInput(sheet, row, column, text);
+  workbookState.setCopiedCells(null);
   const failure = model.getDataValidationFailure(sheet, row, column);
   if (failure) {
     workbookState.setValidationAlert({ sheet, row, column, text, failure });

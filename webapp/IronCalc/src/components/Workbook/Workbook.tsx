@@ -1,6 +1,7 @@
 import type {
   BorderOptions,
   ClipboardCell,
+  InsertCopiedMode,
   IronCalcTheme,
   Link,
   Model,
@@ -75,6 +76,17 @@ interface WorkbookProperties {
 
 // The ref exposes the `WorkbookActions` so the host application can drive
 // the workbook (see `IronCalcHandle.workbook`).
+// How many whole rows or columns a selection is
+function wholeLines(range: [number, number, number, number]) {
+  const [rowStart, columnStart, rowEnd, columnEnd] = range;
+  const allColumns = columnStart === 1 && columnEnd === LAST_COLUMN;
+  const allRows = rowStart === 1 && rowEnd === LAST_ROW;
+  return {
+    wholeRows: allColumns && !allRows ? rowEnd - rowStart + 1 : 0,
+    wholeColumns: allRows && !allColumns ? columnEnd - columnStart + 1 : 0,
+  };
+}
+
 const Workbook = (
   props: WorkbookProperties,
   ref: ForwardedRef<WorkbookActions>,
@@ -484,6 +496,15 @@ const Workbook = (
 
   // The one implementation behind the toolbar, the keyboard shortcuts and the
   // host application (through the imperative handle)
+  const runCellInsert = (action: () => void): void => {
+    try {
+      action();
+    } catch (e) {
+      setAlertDialog({ title: t("insert_paste.error_title"), message: `${e}` });
+    }
+    setRedrawId((id) => id + 1);
+  };
+
   const actions: WorkbookActions = {
     refresh: () => {
       setRedrawId((id) => id + 1);
@@ -555,6 +576,42 @@ const Workbook = (
         () => model.insertColumns(sheet, column + width, width),
         "columns",
       );
+    }),
+    insertCells: whenEditable((down: boolean) => {
+      const { sheet, row, column, width, height } = getSelectedArea();
+      runCellInsert(() =>
+        model.insertCells(
+          sheet,
+          {
+            first_row: row,
+            first_column: column,
+            last_row: row + height - 1,
+            last_column: column + width - 1,
+          },
+          down,
+        ),
+      );
+    }),
+    insertCopiedCells: whenEditable((mode: InsertCopiedMode) => {
+      const copied = workbookState.getCopiedCells();
+      if (!copied) {
+        return;
+      }
+      const isCut = copied.type === "cut";
+      runCellInsert(() => {
+        model.insertCopiedCells(
+          copied.sheet,
+          copied.area,
+          copied.data,
+          isCut,
+          mode,
+          mode === "rows" ? copied.wholeRows : copied.wholeColumns,
+        );
+        if (isCut) {
+          workbookState.clearCutRange();
+          workbookState.setCopiedCells(null);
+        }
+      });
     }),
     openConditionalFormatting: whenEditable(() => {
       openDrawer("conditionalFormatting");
@@ -629,6 +686,41 @@ const Workbook = (
 
   // FIXME: I *think* we should have only one on onKeyPressed function that goes to
   // the Rust backend
+  const sheetFilter = canEdit
+    ? (model.getSheetFilter(model.getSelectedSheet()) ?? null)
+    : null;
+  // The toolbar acts on the table under the selection, or else the sheet's filter
+  const activeFilter: { name: string; filtered: boolean } | null =
+    tableAtSelection ?? sheetFilter;
+  const runFilterAction = (action: () => void): void => {
+    try {
+      action();
+    } catch (e) {
+      setAlertDialog({ title: t("toolbar.filter"), message: `${e}` });
+    }
+    setRedrawId((id) => id + 1);
+  };
+  const toggleFilter = (): void =>
+    runFilterAction(() => {
+      if (tableAtSelection) {
+        model.setTableOptions(tableAtSelection.name, {
+          ...tableAtSelection.options,
+          filter_button: !tableAtSelection.options.filter_button,
+        });
+        return;
+      }
+      const {
+        sheet,
+        range: [a, b, c, d],
+      } = model.getSelectedView();
+      model.toggleSheetFilter(sheet, {
+        first_row: Math.min(a, c),
+        first_column: Math.min(b, d),
+        last_row: Math.max(a, c),
+        last_column: Math.max(b, d),
+      });
+    });
+
   const validationAlert = workbookState.getValidationAlert();
   const finishValidationAlert = (answer: "keep" | "retry" | "undo"): void => {
     const alert = workbookState.getValidationAlert();
@@ -812,6 +904,7 @@ const Workbook = (
     },
     onEscape: (): void => {
       workbookState.clearCutRange();
+      workbookState.setCopiedCells(null);
       workbookState.setCopyStyles(null);
       const el = rootRef.current?.getElementsByClassName(
         "ic-worksheet-sheet-container",
@@ -952,6 +1045,9 @@ const Workbook = (
           return;
         }
         workbookState.clearCutRange();
+        if (workbookState.getCopiedCells()?.type === "cut") {
+          workbookState.setCopiedCells(null);
+        }
         const { items } = event.clipboardData;
         if (!items) {
           return;
@@ -1054,6 +1150,13 @@ const Workbook = (
           });
           sheetData[row] = rowData;
         });
+        workbookState.setCopiedCells({
+          type: "copy",
+          sheet,
+          area: data.range,
+          data: data.data,
+          ...wholeLines(model.getSelectedView().range),
+        });
         const clipboardJsonStr = JSON.stringify({
           type: "copy",
           area: data.range,
@@ -1097,6 +1200,13 @@ const Workbook = (
             rowData[column] = val;
           });
           sheetData[row] = rowData;
+        });
+        workbookState.setCopiedCells({
+          type: "cut",
+          sheet,
+          area: data.range,
+          data: data.data,
+          ...wholeLines(model.getSelectedView().range),
         });
         const clipboardJsonStr = JSON.stringify({
           type: "cut",
@@ -1206,6 +1316,24 @@ const Workbook = (
             }
           }}
           isTableOpen={isDrawerOpen && drawerType === "tableDesign"}
+          isFilterOn={
+            tableAtSelection
+              ? tableAtSelection.options.filter_button
+              : sheetFilter !== null
+          }
+          onToggleFilter={toggleFilter}
+          canClearFilters={activeFilter?.filtered ?? false}
+          onClearFilters={() =>
+            runFilterAction(
+              () => activeFilter && model.clearTableFilters(activeFilter.name),
+            )
+          }
+          canReapplyFilters={activeFilter?.filtered ?? false}
+          onReapplyFilters={() =>
+            runFilterAction(
+              () => activeFilter && model.reapplyFilters(activeFilter.name),
+            )
+          }
           onOpenDataValidation={() => setDataValidationOpen(true)}
           onRemoveDuplicates={() => {
             if (tableAtSelection) {

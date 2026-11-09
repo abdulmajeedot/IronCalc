@@ -1,6 +1,8 @@
 import {
   Clipboard,
+  ClipboardPlus,
   Copy,
+  Filter,
   Plus,
   Scissors,
   StickyNote,
@@ -26,9 +28,24 @@ interface CellContextMenuProps {
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
+  // Shown once something has been copied or cut
+  insertCopiedLabel: string | null;
+  onInsertCopied: () => void;
+  rowCount: number;
+  columnCount: number;
+  onShiftCellsRight: () => void;
+  onShiftCellsDown: () => void;
   hasNote: boolean;
   onEditNote: () => void;
   onDeleteNote: () => void;
+  // Shown when the cell is under a sheet's filter
+  filterActions?: {
+    value: string;
+    filtered: boolean;
+    onFilterByValue: () => void;
+    onClear: () => void;
+    onReapply: () => void;
+  };
 }
 
 const CellContextMenu = (properties: CellContextMenuProps) => {
@@ -48,9 +65,16 @@ const CellContextMenu = (properties: CellContextMenuProps) => {
     onCut,
     onCopy,
     onPaste,
+    insertCopiedLabel,
+    onInsertCopied,
+    rowCount,
+    columnCount,
+    onShiftCellsRight,
+    onShiftCellsDown,
     hasNote,
     onEditNote,
     onDeleteNote,
+    filterActions,
   } = properties;
 
   if (!anchorPosition) {
@@ -75,18 +99,49 @@ const CellContextMenu = (properties: CellContextMenuProps) => {
         icon={<Plus />}
         submenu={
           <>
-            <MenuItem onClick={onInsertColumnLeft}>
-              {t("context_menu.cell.insert_column_left")}
-            </MenuItem>
-            <MenuItem onClick={onInsertColumnRight}>
-              {t("context_menu.cell.insert_column_right")}
-            </MenuItem>
-            <MenuDivider />
+            {insertCopiedLabel ? (
+              <>
+                <MenuItem icon={<ClipboardPlus />} onClick={onInsertCopied}>
+                  {insertCopiedLabel}
+                </MenuItem>
+                <MenuDivider />
+              </>
+            ) : null}
             <MenuItem onClick={onInsertRowAbove}>
-              {t("context_menu.cell.insert_row_above")}
+              {rowCount === 1
+                ? t("context_menu.cell.insert_row_above")
+                : t("context_menu.cell.insert_rows_above_count", {
+                    count: rowCount,
+                  })}
             </MenuItem>
             <MenuItem onClick={onInsertRowBelow}>
-              {t("context_menu.cell.insert_row_below")}
+              {rowCount === 1
+                ? t("context_menu.cell.insert_row_below")
+                : t("context_menu.cell.insert_rows_below_count", {
+                    count: rowCount,
+                  })}
+            </MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={onInsertColumnLeft}>
+              {columnCount === 1
+                ? t("context_menu.cell.insert_column_left")
+                : t("context_menu.cell.insert_columns_left_count", {
+                    count: columnCount,
+                  })}
+            </MenuItem>
+            <MenuItem onClick={onInsertColumnRight}>
+              {columnCount === 1
+                ? t("context_menu.cell.insert_column_right")
+                : t("context_menu.cell.insert_columns_right_count", {
+                    count: columnCount,
+                  })}
+            </MenuItem>
+            <MenuDivider />
+            <MenuItem onClick={onShiftCellsRight}>
+              {t("context_menu.cell.shift_cells_right")}
+            </MenuItem>
+            <MenuItem onClick={onShiftCellsDown}>
+              {t("context_menu.cell.shift_cells_down")}
             </MenuItem>
           </>
         }
@@ -111,6 +166,33 @@ const CellContextMenu = (properties: CellContextMenuProps) => {
       </MenuItemWithSubmenu>
 
       <MenuDivider />
+
+      {filterActions ? (
+        <MenuItemWithSubmenu
+          icon={<Filter />}
+          submenu={
+            <>
+              <MenuItem onClick={filterActions.onFilterByValue}>
+                {t("table.filter_cell_value", { value: filterActions.value })}
+              </MenuItem>
+              <MenuItem
+                disabled={!filterActions.filtered}
+                onClick={filterActions.onClear}
+              >
+                {t("table.clear_all_filters")}
+              </MenuItem>
+              <MenuItem
+                disabled={!filterActions.filtered}
+                onClick={filterActions.onReapply}
+              >
+                {t("toolbar.reapply_filters")}
+              </MenuItem>
+            </>
+          }
+        >
+          {t("table.filter")}
+        </MenuItemWithSubmenu>
+      ) : null}
 
       <MenuItem icon={<StickyNote />} onClick={onEditNote}>
         {t(

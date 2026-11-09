@@ -682,9 +682,16 @@ export interface TableFilterItem {
   has_data: boolean;
 }
 
+export interface SheetFilterInfo {
+  name: string;
+  area: PivotArea;
+  filtered: boolean;
+}
+
 export interface TableMarker {
   table: string;
   column: string;
+  label: string;
   row: number;
   col: number;
   filtered: boolean;
@@ -917,6 +924,8 @@ export interface ValidationSettings {
   error_title: string;
   error_message: string;
 }
+
+export type InsertCopiedMode = "down" | "right" | "rows" | "columns";
 
 export interface ValidationFailure {
   title: string;

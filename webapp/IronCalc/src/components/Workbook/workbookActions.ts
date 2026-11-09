@@ -1,4 +1,8 @@
-import type { HorizontalAlignment, VerticalAlignment } from "@ironcalc/wasm";
+import type {
+  HorizontalAlignment,
+  InsertCopiedMode,
+  VerticalAlignment,
+} from "@ironcalc/wasm";
 import type { MergeCellsOperation } from "../Toolbar/Toolbar";
 
 /**
@@ -32,6 +36,8 @@ export interface WorkbookActions {
   insertRowsBelow: () => void;
   insertColumnsLeft: () => void;
   insertColumnsRight: () => void;
+  insertCells: (down: boolean) => void;
+  insertCopiedCells: (mode: InsertCopiedMode) => void;
   openConditionalFormatting: () => void;
   openNamedRanges: () => void;
   openThemes: () => void;

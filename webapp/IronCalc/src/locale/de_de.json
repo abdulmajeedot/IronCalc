@@ -158,12 +158,20 @@
       "delete_row": "Zeile '{{row}}'",
       "edit_note": "Notiz bearbeiten",
       "insert": "Einfügen...",
-      "insert_column_left": "Spalte links",
-      "insert_column_right": "Spalte rechts",
-      "insert_row_above": "Zeile oben",
-      "insert_row_below": "Zeile unten",
+      "insert_column_left": "1 Spalte links",
+      "insert_column_right": "1 Spalte rechts",
+      "insert_columns_left_count": "{{count}} Spalten links",
+      "insert_columns_right_count": "{{count}} Spalten rechts",
+      "insert_copied_cells": "Kopierte Zellen einfügen...",
+      "insert_cut_cells": "Ausgeschnittene Zellen einfügen...",
+      "insert_row_above": "1 Zeile oben",
+      "insert_row_below": "1 Zeile unten",
+      "insert_rows_above_count": "{{count}} Zeilen oben",
+      "insert_rows_below_count": "{{count}} Zeilen unten",
       "new_note": "Neue Notiz",
-      "paste": "Einfügen"
+      "paste": "Einfügen",
+      "shift_cells_down": "Zellen nach unten verschieben",
+      "shift_cells_right": "Zellen nach rechts verschieben"
     },
     "column_header": {
       "delete_column": "Spalte '{{column}}' löschen",
@@ -278,6 +286,11 @@
   },
   "formula_bar": {
     "manage_named_ranges": "Benannte Bereiche verwalten"
+  },
+  "insert_paste": {
+    "error_title": "Diese Zellen können nicht eingefügt werden",
+    "insert": "Einfügen",
+    "title": "Einfügen"
   },
   "link_dialog": {
     "body_placeholder": "Nachricht (optional)",
@@ -763,6 +776,7 @@
       "top": "Oberer Rahmen",
       "vertical": "Vertikale Rahmen"
     },
+    "clear_filters": "Filter löschen",
     "clear_formatting": "Formatierung löschen",
     "conditional_formatting": "Bedingte Formatierung",
     "copy_styles": "Formatierung kopieren",
@@ -773,6 +787,7 @@
     "decrease_font_size": "Schriftgröße verringern",
     "download_png": "Als PNG herunterladen",
     "fill_color": "Füllfarbe",
+    "filter": "Filtern",
     "font_color": "Schriftfarbe",
     "font_size": "Schriftgröße",
     "format_menu": {
@@ -804,6 +819,7 @@
     "named_styles": "Zellformate",
     "percentage": "Als Prozent formatieren",
     "pivot_table": "PivotTable",
+    "reapply_filters": "Erneut anwenden",
     "redo": "Wiederholen",
     "remove_duplicates": "Duplikate entfernen",
     "scroll_left": "Nach links scrollen",

@@ -28,6 +28,8 @@ use crate::error::XlsxError;
 
 use ironcalc_base::data_validation::DataValidation;
 
+use super::slicers::{load_sheet_filter, LoadedSheetFilter};
+
 use super::{
     conditional_formatting::load_conditional_formatting,
     data_validation::load_data_validations,
@@ -1008,6 +1010,7 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     dxfs: &mut Vec<Dxf>,
     views: &mut Vec<SavedSheetView>,
     validations: &mut Vec<DataValidation>,
+    sheet_filters: &mut Vec<LoadedSheetFilter>,
 ) -> Result<Worksheet, XlsxError> {
     let sheet_name = &settings.name;
     let sheet_id = settings.id;
@@ -1067,6 +1070,7 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     }
 
     validations.extend(load_data_validations(ws, sheet_id));
+    sheet_filters.extend(load_sheet_filter(ws, sheet_id));
 
     let links = load_hyperlinks(ws, &settings.hyperlink_rels)?;
 
@@ -1105,6 +1109,7 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
     dxfs: &mut Vec<Dxf>,
     views: &mut Vec<SavedSheetView>,
     validations: &mut Vec<DataValidation>,
+    sheet_filters: &mut Vec<LoadedSheetFilter>,
 ) -> Result<Vec<Worksheet>, XlsxError> {
     // load comments, tables and hyperlink relationships
     let mut sheet_rels = HashMap::new();
@@ -1164,6 +1169,7 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
                 dxfs,
                 views,
                 validations,
+                sheet_filters,
             )?;
             sheets.push(s);
         }

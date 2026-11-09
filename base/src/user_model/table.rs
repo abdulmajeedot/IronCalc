@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use bitcode::{Decode, Encode};
 
 use crate::constants::{LAST_COLUMN, LAST_ROW};
+use crate::expressions::utils::number_to_column;
 use crate::pivot::{PivotArea, PivotField, PivotTable};
 use crate::table::{
     area_reference, compare_filter_cells, table_area, table_column_index, table_data_rows, Slicer,
@@ -12,6 +13,7 @@ use crate::table::{
     TableColumnFilter, TableEntry, TableFilterItem, TableFilterRule, TableFilterState, TableMarker,
     TableOptions, TableSort, DEFAULT_SLICER_STYLE, DEFAULT_TABLE_STYLE,
 };
+use crate::table::{sheet_filter_name, SheetFilter, SheetFilterInfo};
 use crate::types::{Cell, Comment, Table, TableColumn, TableStyleInfo};
 use crate::user_model::common::UserModel;
 use crate::user_model::history::Diff;
@@ -30,6 +32,7 @@ pub(crate) struct TableSnapshot {
     /// A sheet's comments, kept when rows or columns are deleted.
     comments: Option<(u32, Vec<Comment>)>,
     validations: Vec<crate::data_validation::DataValidation>,
+    sheet_filters: Vec<SheetFilter>,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -82,6 +85,7 @@ impl UserModel<'_> {
             slicers: self.model.workbook.slicers.clone(),
             comments: None,
             validations: self.model.workbook.data_validations.clone(),
+            sheet_filters: self.model.workbook.sheet_filters.clone(),
         }
     }
 
@@ -114,6 +118,7 @@ impl UserModel<'_> {
         if workbook.tables.is_empty()
             && workbook.slicers.is_empty()
             && workbook.data_validations.is_empty()
+            && workbook.sheet_filters.is_empty()
             && !has_comments
         {
             return None;
@@ -127,6 +132,7 @@ impl UserModel<'_> {
         self.model.workbook.table_filters = snapshot.filters.clone();
         self.model.workbook.slicers = snapshot.slicers.clone();
         self.model.workbook.data_validations = snapshot.validations.clone();
+        self.model.workbook.sheet_filters = snapshot.sheet_filters.clone();
         if let Some((sheet, comments)) = &snapshot.comments {
             if let Some(worksheet) = self.model.workbook.worksheets.get_mut(*sheet as usize) {
                 worksheet.comments = comments.clone();
@@ -358,6 +364,7 @@ impl UserModel<'_> {
                 markers.push(TableMarker {
                     table: table.name.clone(),
                     column: column.name.clone(),
+                    label: column.name.clone(),
                     row: area.first_row,
                     col: area.first_column + offset as i32,
                     filtered: state
@@ -369,7 +376,122 @@ impl UserModel<'_> {
                 });
             }
         }
+        if let Some(info) = self.get_sheet_filter(sheet) {
+            let state = self.model.table_filter_state(&info.name);
+            for column in info.area.first_column..=info.area.last_column {
+                let Some(key) = number_to_column(column) else {
+                    continue;
+                };
+                let header = self
+                    .model
+                    .get_formatted_cell_value(sheet, info.area.first_row, column)
+                    .unwrap_or_default();
+                markers.push(TableMarker {
+                    table: info.name.clone(),
+                    label: if header.is_empty() {
+                        key.clone()
+                    } else {
+                        header
+                    },
+                    row: info.area.first_row,
+                    col: column,
+                    filtered: state.is_some_and(|s| s.columns.iter().any(|f| f.column == key)),
+                    sort_descending: state
+                        .and_then(|s| s.sort.as_ref())
+                        .filter(|s| s.column == key)
+                        .map(|s| s.descending),
+                    column: key,
+                });
+            }
+        }
         markers
+    }
+
+    /// The filter on a plain range of a sheet, if there is one.
+    pub fn get_sheet_filter(&self, sheet: u32) -> Option<SheetFilterInfo> {
+        let filter = self.model.sheet_filter_of(sheet)?;
+        let name = sheet_filter_name(filter.sheet_id);
+        Some(SheetFilterInfo {
+            area: self.model.sheet_filter_area(filter).ok()?,
+            filtered: self
+                .model
+                .table_filter_state(&name)
+                .is_some_and(|state| !state.columns.is_empty()),
+            name,
+        })
+    }
+
+    /// Turns a sheet's filter on or off, as the Filter button does. On, it
+    /// goes on `area`, or on the block of data around it if that's one cell.
+    pub fn toggle_sheet_filter(&mut self, sheet: u32, area: PivotArea) -> Result<(), String> {
+        let sheet_id = self.model.workbook.worksheet(sheet)?.sheet_id;
+        if let Some(info) = self.get_sheet_filter(sheet) {
+            let name = info.name;
+            let hidden_by_filter: Vec<i32> = self
+                .model
+                .table_row_visibility(&name)?
+                .into_iter()
+                .filter(|(_, hidden)| *hidden)
+                .map(|(row, _)| row)
+                .collect();
+            return self.table_edit(sheet, &[info.area], move |user| {
+                let workbook = &mut user.model.workbook;
+                workbook.table_filters.retain(|s| s.table != name);
+                workbook.sheet_filters.retain(|f| f.sheet_id != sheet_id);
+                let worksheet = workbook.worksheet_mut(sheet)?;
+                for row in hidden_by_filter {
+                    worksheet.set_row_hidden(row, false)?;
+                }
+                Ok(())
+            });
+        }
+        let single_cell = area.first_row == area.last_row && area.first_column == area.last_column;
+        let area = if single_cell {
+            self.get_current_region(sheet, area.first_row, area.first_column)?
+        } else {
+            let dimension = self.model.workbook.worksheet(sheet)?.dimension();
+            PivotArea {
+                last_row: area.last_row.min(dimension.max_row).max(area.first_row),
+                last_column: area
+                    .last_column
+                    .min(dimension.max_column)
+                    .max(area.first_column),
+                ..area
+            }
+        };
+        let is_blank = area.first_row == area.last_row
+            && area.first_column == area.last_column
+            && self
+                .model
+                .get_formatted_cell_value(sheet, area.first_row, area.first_column)?
+                .is_empty();
+        if is_blank {
+            return Err("Select a cell inside your data, then try again.".to_string());
+        }
+        let sheet_name = self.model.workbook.worksheet(sheet)?.get_name();
+        let overlaps_table = self.model.workbook.tables.values().any(|table| {
+            table.sheet_name == sheet_name
+                && table_area(table).is_some_and(|place| place.intersects(&area))
+        });
+        if overlaps_table {
+            return Err("A filter can't reach across a table.".to_string());
+        }
+        self.table_edit(sheet, &[area], move |user| {
+            user.model
+                .workbook
+                .sheet_filters
+                .push(SheetFilter { sheet_id, area });
+            Ok(())
+        })
+    }
+
+    /// Applies a filter again, so it takes in values that have changed.
+    pub fn reapply_filters(&mut self, name: &str) -> Result<(), String> {
+        let scope = self.model.filter_scope(name)?;
+        let name = name.to_string();
+        self.table_edit(scope.sheet, &[scope.area], move |user| {
+            user.reapply_table_filters(&name)
+        })
     }
 
     /// The values a filter list offers for a table column.
@@ -762,7 +884,7 @@ impl UserModel<'_> {
 
     /// Hides and shows rows to match the table's filters, inside an edit.
     fn reapply_table_filters(&mut self, name: &str) -> Result<(), String> {
-        let (sheet, _) = self.table_place(name)?;
+        let sheet = self.model.filter_scope(name)?.sheet;
         let visibility = self.model.table_row_visibility(name)?;
         let worksheet = self.model.workbook.worksheet_mut(sheet)?;
         for (row, hidden) in visibility {
@@ -926,10 +1048,9 @@ impl UserModel<'_> {
         column: &str,
         rule: Option<TableFilterRule>,
     ) -> Result<(), String> {
-        let (sheet, area) = self.table_place(name)?;
-        let table = self.table_named(name)?;
-        table_column_index(table, column).ok_or("Column not found")?;
-        let (first, last) = table_data_rows(table, &area);
+        let scope = self.model.filter_scope(name)?;
+        scope.index(column).ok_or("Column not found")?;
+        let (sheet, area, first, last) = (scope.sheet, scope.area, scope.first, scope.last);
         let name = name.to_string();
         let column = column.to_string();
         let region = PivotArea {
@@ -966,7 +1087,8 @@ impl UserModel<'_> {
 
     /// Removes every filter of a table and shows its rows.
     pub fn clear_table_filters(&mut self, name: &str) -> Result<(), String> {
-        let (sheet, area) = self.table_place(name)?;
+        let scope = self.model.filter_scope(name)?;
+        let (sheet, area) = (scope.sheet, scope.area);
         let name = name.to_string();
         self.table_edit(sheet, &[area], move |user| {
             let filters = &mut user.model.workbook.table_filters;
@@ -980,11 +1102,10 @@ impl UserModel<'_> {
 
     /// Rows move whole, and only the rows showing take part, as in Excel.
     pub fn sort_table(&mut self, name: &str, column: &str, descending: bool) -> Result<(), String> {
-        let (sheet, area) = self.table_place(name)?;
-        let table = self.table_named(name)?;
-        let offset = table_column_index(table, column).ok_or("Column not found")?;
-        let column_name = table.columns[offset].name.clone();
-        let (first, last) = table_data_rows(table, &area);
+        let scope = self.model.filter_scope(name)?;
+        let offset = scope.index(column).ok_or("Column not found")?;
+        let column_name = scope.columns[offset].clone();
+        let (sheet, area, first, last) = (scope.sheet, scope.area, scope.first, scope.last);
         let name = name.to_string();
         self.table_edit(sheet, &[area], move |user| {
             let worksheet = user.model.workbook.worksheet(sheet)?;
@@ -2455,4 +2576,225 @@ mod tests {
     }
 
     use crate::types::Color;
+}
+
+#[cfg(test)]
+mod sheet_filter_tests {
+    #![allow(clippy::unwrap_used)]
+
+    use crate::pivot::PivotArea;
+    use crate::table::{TableFilterOperator, TableFilterRule};
+    use crate::UserModel;
+
+    fn area(first_row: i32, first_column: i32, last_row: i32, last_column: i32) -> PivotArea {
+        PivotArea {
+            first_row,
+            first_column,
+            last_row,
+            last_column,
+        }
+    }
+
+    fn sales() -> UserModel<'static> {
+        let mut model = UserModel::new_empty("book", "en", "UTC", "en").unwrap();
+        for (row, values) in [
+            ["Region", "Qty"],
+            ["North", "4"],
+            ["South", "12"],
+            ["North", "8"],
+            ["West", "15"],
+        ]
+        .iter()
+        .enumerate()
+        {
+            for (column, value) in values.iter().enumerate() {
+                model
+                    .set_user_input(0, row as i32 + 2, column as i32 + 2, value)
+                    .unwrap();
+            }
+        }
+        model
+    }
+
+    fn filtered() -> (UserModel<'static>, String) {
+        let mut model = sales();
+        model.toggle_sheet_filter(0, area(3, 2, 3, 2)).unwrap();
+        let name = model.get_sheet_filter(0).unwrap().name;
+        (model, name)
+    }
+
+    fn values(visible: &[&str]) -> Option<TableFilterRule> {
+        Some(TableFilterRule::Values {
+            visible: visible.iter().map(|v| v.to_string()).collect(),
+        })
+    }
+
+    fn hidden(model: &UserModel) -> Vec<i32> {
+        (1..=8)
+            .filter(|row| {
+                model.model.workbook.worksheets[0]
+                    .is_row_hidden(*row)
+                    .unwrap()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn one_cell_finds_the_block_of_data_and_buttons_go_on_its_first_row() {
+        let (model, _) = filtered();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area, area(2, 2, 6, 3));
+        let markers = model.get_table_markers(0);
+        assert_eq!(markers.len(), 2);
+        assert_eq!((markers[0].row, markers[0].col), (2, 2));
+        assert_eq!(markers[0].column, "B");
+        assert_eq!(markers[1].label, "Qty");
+    }
+
+    #[test]
+    fn filtering_hides_rows_and_undo_brings_them_back() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        assert_eq!(hidden(&model), [4, 6]);
+        assert!(model.get_sheet_filter(0).unwrap().filtered);
+        assert!(model.get_table_markers(0)[0].filtered);
+        model.undo().unwrap();
+        assert!(hidden(&model).is_empty());
+        model.redo().unwrap();
+        assert_eq!(hidden(&model), [4, 6]);
+    }
+
+    #[test]
+    fn conditions_stack_across_columns() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        model
+            .set_table_filter(
+                &name,
+                "C",
+                Some(TableFilterRule::Condition {
+                    operator: TableFilterOperator::GreaterThan,
+                    value: "5".to_string(),
+                    value2: String::new(),
+                }),
+            )
+            .unwrap();
+        assert_eq!(hidden(&model), [3, 4, 6]);
+        model.clear_table_filters(&name).unwrap();
+        assert!(hidden(&model).is_empty());
+    }
+
+    #[test]
+    fn sorting_moves_the_rows_under_the_buttons() {
+        let (mut model, name) = filtered();
+        model.sort_table(&name, "C", true).unwrap();
+        assert_eq!(model.get_cell_content(0, 3, 3).unwrap(), "15");
+        assert_eq!(model.get_cell_content(0, 3, 2).unwrap(), "West");
+        assert_eq!(model.get_cell_content(0, 2, 2).unwrap(), "Region");
+        assert_eq!(model.get_table_markers(0)[1].sort_descending, Some(true));
+    }
+
+    #[test]
+    fn items_and_rows_typed_below_are_included() {
+        let (mut model, name) = filtered();
+        model.set_user_input(0, 7, 2, "East").unwrap();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area.last_row, 7);
+        let labels: Vec<String> = model
+            .get_table_filter_items(&name, "B")
+            .unwrap()
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        assert_eq!(labels, ["East", "North", "South", "West"]);
+    }
+
+    #[test]
+    fn reapply_takes_in_changed_values() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        model.set_user_input(0, 3, 2, "South").unwrap();
+        assert_eq!(hidden(&model), [4, 6]);
+        model.reapply_filters(&name).unwrap();
+        assert_eq!(hidden(&model), [3, 4, 6]);
+    }
+
+    #[test]
+    fn turning_it_off_shows_only_what_the_filter_hid() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        model.set_rows_hidden(0, 8, 8, true).unwrap();
+        model.toggle_sheet_filter(0, area(1, 1, 1, 1)).unwrap();
+        assert!(model.get_sheet_filter(0).is_none());
+        assert_eq!(hidden(&model), [8]);
+        assert!(model.get_table_markers(0).is_empty());
+        model.undo().unwrap();
+        assert_eq!(hidden(&model), [4, 6, 8]);
+        assert!(model.get_sheet_filter(0).unwrap().filtered);
+    }
+
+    #[test]
+    fn it_follows_rows_and_columns() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "C", values(&["4", "8"]))
+            .unwrap();
+        model.insert_columns(0, 1, 1).unwrap();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area, area(2, 3, 6, 4));
+        assert!(model.get_table_filter(&name, "D").is_some());
+        assert!(model.get_table_filter(&name, "C").is_none());
+        model.insert_rows(0, 1, 2).unwrap();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area, area(4, 3, 8, 4));
+        model.delete_columns(0, 4, 1).unwrap();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area, area(4, 3, 8, 3));
+        assert!(!model.get_sheet_filter(0).unwrap().filtered);
+    }
+
+    #[test]
+    fn deleting_the_header_row_removes_it_and_undo_restores_it() {
+        let (mut model, _) = filtered();
+        model.delete_rows(0, 2, 1).unwrap();
+        assert!(model.get_sheet_filter(0).is_none());
+        model.undo().unwrap();
+        assert_eq!(model.get_sheet_filter(0).unwrap().area, area(2, 2, 6, 3));
+    }
+
+    #[test]
+    fn subtotal_leaves_out_filtered_rows() {
+        let (mut model, name) = filtered();
+        model
+            .set_user_input(0, 10, 3, "=SUBTOTAL(9,C3:C6)")
+            .unwrap();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        model.evaluate();
+        assert_eq!(model.get_formatted_cell_value(0, 10, 3).unwrap(), "12");
+    }
+
+    #[test]
+    fn it_is_saved_and_copied_with_the_sheet() {
+        let (mut model, name) = filtered();
+        model
+            .set_table_filter(&name, "B", values(&["North"]))
+            .unwrap();
+        let reopened = UserModel::from_bytes(&model.to_bytes(), "en").unwrap();
+        assert!(reopened.get_sheet_filter(0).unwrap().filtered);
+        model.duplicate_sheet(0).unwrap();
+        assert!(model.get_sheet_filter(1).unwrap().filtered);
+    }
+
+    #[test]
+    fn refused_on_nothing_and_across_a_table() {
+        let mut model = sales();
+        assert!(model.toggle_sheet_filter(0, area(20, 20, 20, 20)).is_err());
+        model.create_table(0, area(2, 2, 6, 3), true, None).unwrap();
+        assert!(model.toggle_sheet_filter(0, area(1, 1, 9, 9)).is_err());
+    }
 }

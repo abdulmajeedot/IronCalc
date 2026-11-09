@@ -24,6 +24,8 @@ import {
   DecimalsArrowRight,
   DollarSign,
   Euro,
+  Filter,
+  FilterX,
   Grid2X2,
   Grid2x2Check,
   Grid2x2X,
@@ -40,6 +42,7 @@ import {
   Plus,
   PoundSterling,
   Redo2,
+  RefreshCw,
   RemoveFormatting,
   Rows3,
   Strikethrough,
@@ -134,6 +137,12 @@ type ToolbarProperties = {
   onInsertSlicer: () => void;
   onOpenDataValidation: () => void;
   onRemoveDuplicates: () => void;
+  isFilterOn: boolean;
+  onToggleFilter: () => void;
+  canClearFilters: boolean;
+  onClearFilters: () => void;
+  canReapplyFilters: boolean;
+  onReapplyFilters: () => void;
   canInsertSlicer: boolean;
   onOpenNamedStyles: () => void;
   isNamedStylesOpen: boolean;
@@ -538,6 +547,31 @@ function Toolbar(properties: ToolbarProperties) {
               aria-label={t("toolbar.slicer")}
               onClick={properties.onInsertSlicer}
               disabled={!canEdit || !properties.canInsertSlicer}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.filter")}>
+            <IconButton
+              icon={<Filter />}
+              aria-label={t("toolbar.filter")}
+              pressed={properties.isFilterOn}
+              onClick={properties.onToggleFilter}
+              disabled={!canEdit}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.clear_filters")}>
+            <IconButton
+              icon={<FilterX />}
+              aria-label={t("toolbar.clear_filters")}
+              onClick={properties.onClearFilters}
+              disabled={!canEdit || !properties.canClearFilters}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.reapply_filters")}>
+            <IconButton
+              icon={<RefreshCw />}
+              aria-label={t("toolbar.reapply_filters")}
+              onClick={properties.onReapplyFilters}
+              disabled={!canEdit || !properties.canReapplyFilters}
             />
           </Tooltip>
           <Tooltip title={t("toolbar.data_validation")}>

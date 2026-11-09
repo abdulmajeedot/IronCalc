@@ -158,12 +158,20 @@
       "delete_row": "Riga '{{row}}'",
       "edit_note": "Modifica nota",
       "insert": "Inserisci...",
-      "insert_column_left": "Colonna a sinistra",
-      "insert_column_right": "Colonna a destra",
-      "insert_row_above": "Riga sopra",
-      "insert_row_below": "Riga sotto",
+      "insert_column_left": "1 colonna a sinistra",
+      "insert_column_right": "1 colonna a destra",
+      "insert_columns_left_count": "{{count}} colonne a sinistra",
+      "insert_columns_right_count": "{{count}} colonne a destra",
+      "insert_copied_cells": "Inserisci celle copiate...",
+      "insert_cut_cells": "Inserisci celle tagliate...",
+      "insert_row_above": "1 riga sopra",
+      "insert_row_below": "1 riga sotto",
+      "insert_rows_above_count": "{{count}} righe sopra",
+      "insert_rows_below_count": "{{count}} righe sotto",
       "new_note": "Nuova nota",
-      "paste": "Incolla"
+      "paste": "Incolla",
+      "shift_cells_down": "Sposta celle in basso",
+      "shift_cells_right": "Sposta celle a destra"
     },
     "column_header": {
       "delete_column": "Elimina la colonna '{{column}}'",
@@ -278,6 +286,11 @@
   },
   "formula_bar": {
     "manage_named_ranges": "Gestisci intervalli denominati"
+  },
+  "insert_paste": {
+    "error_title": "Impossibile inserire queste celle",
+    "insert": "Inserisci",
+    "title": "Inserisci e incolla"
   },
   "link_dialog": {
     "body_placeholder": "Messaggio (facoltativo)",
@@ -763,6 +776,7 @@
       "top": "Bordi superiori",
       "vertical": "Bordi verticali"
     },
+    "clear_filters": "Cancella filtri",
     "clear_formatting": "Cancella formattazione",
     "conditional_formatting": "Formattazione condizionale",
     "copy_styles": "Copia stili",
@@ -773,6 +787,7 @@
     "decrease_font_size": "Riduci dimensione carattere",
     "download_png": "Scarica come PNG",
     "fill_color": "Colore riempimento",
+    "filter": "Filtro",
     "font_color": "Colore carattere",
     "font_size": "Dimensione carattere",
     "format_menu": {
@@ -804,6 +819,7 @@
     "named_styles": "Stili di cella",
     "percentage": "Formato percentuale",
     "pivot_table": "Tabella pivot",
+    "reapply_filters": "Riapplica",
     "redo": "Ripeti",
     "remove_duplicates": "Rimuovi duplicati",
     "scroll_left": "Scorri a sinistra",

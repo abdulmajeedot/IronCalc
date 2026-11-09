@@ -3,9 +3,10 @@
 
 use std::collections::HashMap;
 
+use ironcalc_base::expressions::utils::column_to_number;
 use ironcalc_base::table::{
-    area_reference, table_area, table_data_rows, Slicer, SlicerPlacement, SlicerSource,
-    TableColumnFilter, TableFilterOperator, TableFilterRule, BLANK_FILTER_LABEL,
+    area_reference, sheet_filter_name, table_area, table_data_rows, Slicer, SlicerPlacement,
+    SlicerSource, TableColumnFilter, TableFilterOperator, TableFilterRule, BLANK_FILTER_LABEL,
 };
 use ironcalc_base::types::{Table, Workbook, Worksheet};
 use ironcalc_base::Model;
@@ -126,6 +127,8 @@ pub(crate) struct ExportedExtras {
     caches: Vec<(String, bool)>,
     /// Each slicer cache needs a defined name.
     names: Vec<String>,
+    /// The range of each sheet filter: `(sheet index, range)`.
+    pub(crate) sheet_filters: Vec<(u32, ironcalc_base::pivot::PivotArea)>,
 }
 
 impl ExportedExtras {
@@ -272,6 +275,66 @@ fn filter_xml(index: usize, filter: &TableColumnFilter) -> String {
         },
     };
     format!("<filterColumn colId=\"{index}\">{body}</filterColumn>")
+}
+
+/// The `<autoFilter>` and `<sortState>` of a worksheet's filter.
+pub(crate) fn get_sheet_filter_xml(model: &Model, worksheet: &Worksheet) -> String {
+    let Some(filter) = model
+        .workbook
+        .sheet_filters
+        .iter()
+        .find(|filter| filter.sheet_id == worksheet.sheet_id)
+    else {
+        return String::new();
+    };
+    let Ok(area) = model.sheet_filter_extent(filter) else {
+        return String::new();
+    };
+    let state = model.table_filter_state(&sheet_filter_name(worksheet.sheet_id));
+    let offset = |key: &str| Some(column_to_number(key).ok()? - area.first_column);
+    let columns: String = state
+        .map(|s| {
+            let mut filters: Vec<(i32, &TableColumnFilter)> = s
+                .columns
+                .iter()
+                .filter_map(|f| Some((offset(&f.column)?, f)))
+                .collect();
+            filters.sort_by_key(|(index, _)| *index);
+            filters
+                .iter()
+                .map(|(i, f)| filter_xml(*i as usize, f))
+                .collect()
+        })
+        .unwrap_or_default();
+    let sort = state
+        .and_then(|s| s.sort.as_ref())
+        .and_then(|sort| {
+            let column = column_to_number(&sort.column).ok()?;
+            let data = ironcalc_base::pivot::PivotArea {
+                first_row: area.first_row + 1,
+                ..area
+            };
+            let key = ironcalc_base::pivot::PivotArea {
+                first_column: column,
+                last_column: column,
+                ..data
+            };
+            let descending = if sort.descending {
+                " descending=\"1\""
+            } else {
+                ""
+            };
+            Some(format!(
+                "<sortState ref=\"{}\"><sortCondition{descending} ref=\"{}\"/></sortState>",
+                area_reference(&data),
+                area_reference(&key)
+            ))
+        })
+        .unwrap_or_default();
+    format!(
+        "<autoFilter ref=\"{}\">{columns}</autoFilter>{sort}",
+        area_reference(&area)
+    )
 }
 
 fn column_name_xml(name: &str) -> String {
@@ -512,6 +575,15 @@ pub(crate) fn export_extras(model: &Model, pivots: &mut [ExportedPivot]) -> Expo
     extras
         .sheets
         .resize_with(workbook.worksheets.len(), SheetExtras::default);
+    for filter in &workbook.sheet_filters {
+        let index = workbook
+            .worksheets
+            .iter()
+            .position(|worksheet| worksheet.sheet_id == filter.sheet_id);
+        if let (Some(index), Ok(area)) = (index, model.sheet_filter_extent(filter)) {
+            extras.sheet_filters.push((index as u32, area));
+        }
+    }
 
     let mut names: Vec<&String> = workbook.tables.keys().collect();
     names.sort();

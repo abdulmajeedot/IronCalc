@@ -53,6 +53,10 @@ pub(super) fn load_workbook<R: Read + std::io::Seek>(
         .collect();
     for node in name_nodes {
         let name = get_attribute(node, "name")?.to_string();
+        // Written anew from the sheet's filter
+        if name == "_xlnm._FilterDatabase" {
+            continue;
+        }
         let formula = node.text().unwrap_or("").to_string();
         // NOTE: In Excel the `localSheetId` is just the index of the worksheet and unrelated to the sheetId
         let sheet_id = match node.attribute("localSheetId") {

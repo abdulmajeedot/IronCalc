@@ -221,6 +221,7 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
                 view.sheets
                     .iter()
                     .find(|v| v.sheet_id == worksheet.sheet_id),
+                &tables::get_sheet_filter_xml(model, worksheet),
                 &data_validation::get_data_validations_xml(workbook, worksheet),
                 &sheet_extras.parts_xml(rel_base),
                 &sheet_extras.ext_xml(rel_base),

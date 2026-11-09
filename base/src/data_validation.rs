@@ -12,6 +12,7 @@ use crate::actions::{displace_cf_col, displace_cf_formula_str, displace_cf_row};
 use crate::calc_result::CalcResult;
 use crate::cell::CellValue;
 use crate::conditional_formatting::parse_sqref;
+use crate::constants::{LAST_COLUMN, LAST_ROW};
 use crate::expressions::parser::stringify::{
     rename_sheet_in_node, to_english_string, DisplaceData,
 };
@@ -214,6 +215,85 @@ pub(crate) fn sqref_of(ranges: &[(i32, i32, i32, i32)]) -> String {
         .join(" ")
 }
 
+/// What is left of `range` once `hole` is cut out of it.
+pub(crate) fn subtract_range(
+    range: (i32, i32, i32, i32),
+    hole: (i32, i32, i32, i32),
+) -> Vec<(i32, i32, i32, i32)> {
+    let (r1, c1, r2, c2) = range;
+    let (h1, k1, h2, k2) = hole;
+    if h1 > r2 || h2 < r1 || k1 > c2 || k2 < c1 {
+        return vec![range];
+    }
+    let mut pieces = Vec::new();
+    if r1 < h1 {
+        pieces.push((r1, c1, h1 - 1, c2));
+    }
+    let (top, bottom) = (r1.max(h1), r2.min(h2));
+    if c1 < k1 {
+        pieces.push((top, c1, bottom, k1 - 1));
+    }
+    if k2 < c2 {
+        pieces.push((top, k2 + 1, bottom, c2));
+    }
+    if h2 < r2 {
+        pieces.push((h2 + 1, c1, r2, c2));
+    }
+    pieces
+}
+
+/// A range split where a block of cells moved away from under it.
+fn ranges_after_block(
+    range: (i32, i32, i32, i32),
+    data: &DisplaceData,
+) -> Vec<(i32, i32, i32, i32)> {
+    let (zone, down, delta) = match *data {
+        DisplaceData::BlockDown {
+            row,
+            first_column,
+            last_column,
+            delta,
+            ..
+        } => ((row, first_column, LAST_ROW, last_column), true, delta),
+        DisplaceData::BlockRight {
+            column,
+            first_row,
+            last_row,
+            delta,
+            ..
+        } => ((first_row, column, last_row, LAST_COLUMN), false, delta),
+        _ => return vec![range],
+    };
+    let mut pieces = subtract_range(range, zone);
+    let inside = (
+        range.0.max(zone.0),
+        range.1.max(zone.1),
+        range.2.min(zone.2),
+        range.3.min(zone.3),
+    );
+    if inside.0 > inside.2 || inside.1 > inside.3 {
+        return pieces;
+    }
+    // Going back, the cells of the hole are gone
+    let survivor = if delta >= 0 {
+        Some(inside)
+    } else if down {
+        let first = inside.0.max(zone.0 - delta);
+        (first <= inside.2).then_some((first, inside.1, inside.2, inside.3))
+    } else {
+        let first = inside.1.max(zone.1 - delta);
+        (first <= inside.3).then_some((inside.0, first, inside.2, inside.3))
+    };
+    if let Some((a, b, c, d)) = survivor {
+        pieces.push(if down {
+            (a + delta, b, (c + delta).min(LAST_ROW), d)
+        } else {
+            (a, b + delta, c, (d + delta).min(LAST_COLUMN))
+        });
+    }
+    pieces
+}
+
 fn inside(range: &(i32, i32, i32, i32), row: i32, column: i32) -> bool {
     (range.0..=range.2).contains(&row) && (range.1..=range.3).contains(&column)
 }
@@ -242,13 +322,14 @@ fn shifted_span(first: i32, last: i32, at: i32, delta: i32) -> Option<(i32, i32)
     (new_first <= new_last).then_some((new_first, new_last))
 }
 
-fn displaced_range(
+pub(crate) fn displaced_range(
     range: (i32, i32, i32, i32),
     data: &DisplaceData,
     sheet: u32,
 ) -> Option<(i32, i32, i32, i32)> {
     let (r1, c1, r2, c2) = range;
     match *data {
+        DisplaceData::BlockDown { .. } | DisplaceData::BlockRight { .. } => Some(range),
         DisplaceData::Row { row, delta, .. } => {
             let (first, last) = shifted_span(r1, r2, row, delta)?;
             Some((first, c1, last, c2))
@@ -505,6 +586,7 @@ impl Model<'_> {
             if index as u32 == sheet {
                 let moved: Vec<_> = ranges
                     .into_iter()
+                    .flat_map(|range| ranges_after_block(range, data))
                     .filter_map(|range| displaced_range(range, data, sheet))
                     .collect();
                 if moved.is_empty() {

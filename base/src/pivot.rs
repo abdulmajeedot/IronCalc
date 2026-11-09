@@ -797,6 +797,7 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
         && workbook.table_filters.is_empty()
         && workbook.slicers.is_empty()
         && workbook.data_validations.is_empty()
+        && workbook.sheet_filters.is_empty()
         && *view == SavedView::default()
     {
         return body;
@@ -815,6 +816,7 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
         slicers: workbook.slicers.clone(),
         view: view.clone(),
         data_validations: workbook.data_validations.clone(),
+        sheet_filters: workbook.sheet_filters.clone(),
     })
     .unwrap_or_default();
     let mut bytes =
@@ -838,6 +840,8 @@ struct SavedExtras {
     view: SavedView,
     #[serde(default)]
     data_validations: Vec<crate::data_validation::DataValidation>,
+    #[serde(default)]
+    sheet_filters: Vec<crate::table::SheetFilter>,
 }
 
 fn restore_pivots(workbook: &mut Workbook, pivots: &[u8]) -> Result<(), String> {
@@ -880,6 +884,7 @@ pub fn workbook_from_bytes(bytes: &[u8]) -> Result<Workbook, String> {
         workbook.slicers = extras.slicers;
         workbook.saved_view = extras.view;
         workbook.data_validations = extras.data_validations;
+        workbook.sheet_filters = extras.sheet_filters;
         return Ok(workbook);
     }
     let Some(rest) = bytes.strip_prefix(PIVOT_MAGIC) else {

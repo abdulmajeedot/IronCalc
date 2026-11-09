@@ -158,12 +158,20 @@
       "delete_row": "Row '{{row}}'",
       "edit_note": "Edit Note",
       "insert": "Insert...",
-      "insert_column_left": "Column left",
-      "insert_column_right": "Column right",
-      "insert_row_above": "Row above",
-      "insert_row_below": "Row below",
+      "insert_column_left": "1 Column Left",
+      "insert_column_right": "1 Column Right",
+      "insert_columns_left_count": "{{count}} Columns Left",
+      "insert_columns_right_count": "{{count}} Columns Right",
+      "insert_copied_cells": "Insert Copied Cells...",
+      "insert_cut_cells": "Insert Cut Cells...",
+      "insert_row_above": "1 Row Above",
+      "insert_row_below": "1 Row Below",
+      "insert_rows_above_count": "{{count}} Rows Above",
+      "insert_rows_below_count": "{{count}} Rows Below",
       "new_note": "New Note",
-      "paste": "Paste"
+      "paste": "Paste",
+      "shift_cells_down": "Shift cells down",
+      "shift_cells_right": "Shift cells right"
     },
     "column_header": {
       "delete_column": "Delete column '{{column}}'",
@@ -278,6 +286,11 @@
   },
   "formula_bar": {
     "manage_named_ranges": "Manage Named Ranges"
+  },
+  "insert_paste": {
+    "error_title": "Can't insert these cells",
+    "insert": "Insert",
+    "title": "Insert Paste"
   },
   "link_dialog": {
     "body_placeholder": "Body (optional)",
@@ -763,6 +776,7 @@
       "top": "Top borders",
       "vertical": "Vertical borders"
     },
+    "clear_filters": "Clear filters",
     "clear_formatting": "Clear formatting",
     "conditional_formatting": "Conditional formatting",
     "copy_styles": "Copy styles",
@@ -773,6 +787,7 @@
     "decrease_font_size": "Decrease font size",
     "download_png": "Download as PNG",
     "fill_color": "Fill color",
+    "filter": "Filter",
     "font_color": "Font color",
     "font_size": "Font size",
     "format_menu": {
@@ -804,6 +819,7 @@
     "named_styles": "Cell styles",
     "percentage": "Format as percentage",
     "pivot_table": "PivotTable",
+    "reapply_filters": "Reapply",
     "redo": "Redo",
     "remove_duplicates": "Remove duplicates",
     "scroll_left": "Scroll left",

@@ -47,9 +47,10 @@ export type TableDialogState =
       kind: "filter";
       table: string;
       column: string;
+      label: string;
       operator: TableFilterOperator;
     }
-  | { kind: "top"; table: string; column: string };
+  | { kind: "top"; table: string; column: string; label: string };
 
 const TEXT_OPERATORS: TableFilterOperator[] = [
   "equals",
@@ -140,7 +141,7 @@ export const TableMenus = ({
   );
 
   if (state.type === "dropdown") {
-    const { table, column, filtered } = state.marker;
+    const { table, column, label, filtered } = state.marker;
     const items = model.getTableFilterItems(table, column);
     const labels = items.map((i) => i.label);
     const numeric = labels
@@ -153,7 +154,7 @@ export const TableMenus = ({
           <MenuItem
             key={operator}
             onClick={() =>
-              onDialog({ kind: "filter", table, column, operator })
+              onDialog({ kind: "filter", table, column, label, operator })
             }
           >
             {t(`table.operators.${operator}`)}
@@ -162,7 +163,9 @@ export const TableMenus = ({
         {numeric ? (
           <>
             <MenuDivider />
-            <MenuItem onClick={() => onDialog({ kind: "top", table, column })}>
+            <MenuItem
+              onClick={() => onDialog({ kind: "top", table, column, label })}
+            >
               {t("table.top_10")}
             </MenuItem>
             {(["above_average", "below_average"] as const).map((operator) => (
@@ -197,7 +200,7 @@ export const TableMenus = ({
             disabled={!filtered}
             onClick={() => run(() => model.setTableFilter(table, column, null))}
           >
-            {t("table.clear_filter_from", { column })}
+            {t("table.clear_filter_from", { column: label })}
           </MenuItem>
           <MenuItemWithSubmenu submenu={conditions}>
             {t(numeric ? "table.number_filters" : "table.text_filters")}
@@ -660,7 +663,7 @@ const TableDialog = ({
       const countValue = Number(count);
       return (
         <DialogShell
-          title={t("table.top_10_title", { column: state.column })}
+          title={t("table.top_10_title", { column: state.label })}
           onClose={onClose}
           confirmDisabled={!(countValue > 0)}
           onConfirm={() =>
@@ -713,7 +716,7 @@ const TableDialog = ({
       const twoValues = operator === "between" || operator === "not_between";
       return (
         <DialogShell
-          title={t("table.custom_filter_title", { column: state.column })}
+          title={t("table.custom_filter_title", { column: state.label })}
           onClose={onClose}
           confirmDisabled={value === "" || (twoValues && value2 === "")}
           onConfirm={() =>

@@ -33,10 +33,13 @@ use std::collections::HashMap;
 
 use ironcalc_base::expressions::parser::{new_parser_english, stringify::to_excel_string};
 use ironcalc_base::expressions::types::CellReferenceRC;
+use ironcalc_base::expressions::utils::number_to_column;
 use ironcalc_base::types::{SheetState, Workbook};
 
 use super::escape::escape_xml;
 use super::xml_constants::XML_DECLARATION;
+
+const FILTER_DATABASE: &str = "_xlnm._FilterDatabase";
 
 pub(crate) fn get_workbook_xml(
     workbook: &Workbook,
@@ -90,6 +93,10 @@ pub(crate) fn get_workbook_xml(
     };
     let mut defined_names_str: Vec<String> = vec![];
     for defined_name in &workbook.defined_names {
+        // Files read before sheet filters existed can still hold this one
+        if defined_name.name == FILTER_DATABASE {
+            continue;
+        }
         let name = &defined_name.name;
         let name = escape_xml(name);
         let local_sheet_id = if let Some(sheet_id) = defined_name.sheet_id {
@@ -122,6 +129,23 @@ pub(crate) fn get_workbook_xml(
         ))
     }
 
+    // Excel expects every sheet filter to have this hidden name
+    for (index, area) in &extras.sheet_filters {
+        let cell = |row: i32, column: i32| {
+            format!("${}${row}", number_to_column(column).unwrap_or_default())
+        };
+        let sheet_name = workbook.worksheets[*index as usize]
+            .name
+            .replace('\'', "''");
+        defined_names_str.push(format!(
+            "<definedName name=\"{FILTER_DATABASE}\" localSheetId=\"{index}\" hidden=\"1\">{}</definedName>",
+            escape_xml(&format!(
+                "'{sheet_name}'!{}:{}",
+                cell(area.first_row, area.first_column),
+                cell(area.last_row, area.last_column)
+            ))
+        ));
+    }
     let sheets = sheets_str.join("");
     let defined_names = defined_names_str.join("") + &extras.defined_names_xml();
     let pivot_caches = super::pivot::pivot_caches_xml(workbook, pivots);

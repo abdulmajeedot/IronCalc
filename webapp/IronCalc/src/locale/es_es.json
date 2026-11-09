@@ -158,12 +158,20 @@
       "delete_row": "Fila '{{row}}'",
       "edit_note": "Editar nota",
       "insert": "Insertar...",
-      "insert_column_left": "Columna a la izquierda",
-      "insert_column_right": "Columna a la derecha",
-      "insert_row_above": "Fila encima",
-      "insert_row_below": "Fila debajo",
+      "insert_column_left": "1 columna a la izquierda",
+      "insert_column_right": "1 columna a la derecha",
+      "insert_columns_left_count": "{{count}} columnas a la izquierda",
+      "insert_columns_right_count": "{{count}} columnas a la derecha",
+      "insert_copied_cells": "Insertar celdas copiadas...",
+      "insert_cut_cells": "Insertar celdas cortadas...",
+      "insert_row_above": "1 fila encima",
+      "insert_row_below": "1 fila debajo",
+      "insert_rows_above_count": "{{count}} filas encima",
+      "insert_rows_below_count": "{{count}} filas debajo",
       "new_note": "Nueva nota",
-      "paste": "Pegar"
+      "paste": "Pegar",
+      "shift_cells_down": "Desplazar celdas hacia abajo",
+      "shift_cells_right": "Desplazar celdas a la derecha"
     },
     "column_header": {
       "delete_column": "Eliminar la columna '{{column}}'",
@@ -278,6 +286,11 @@
   },
   "formula_bar": {
     "manage_named_ranges": "Gestionar rangos con nombre"
+  },
+  "insert_paste": {
+    "error_title": "No se pueden insertar estas celdas",
+    "insert": "Insertar",
+    "title": "Insertar y pegar"
   },
   "link_dialog": {
     "body_placeholder": "Mensaje (opcional)",
@@ -763,6 +776,7 @@
       "top": "Bordes superiores",
       "vertical": "Bordes verticales"
     },
+    "clear_filters": "Borrar filtros",
     "clear_formatting": "Borrar formato",
     "conditional_formatting": "Formato condicional",
     "copy_styles": "Copiar estilos",
@@ -773,6 +787,7 @@
     "decrease_font_size": "Disminuir tamaño de fuente",
     "download_png": "Descargar como PNG",
     "fill_color": "Color de relleno",
+    "filter": "Filtro",
     "font_color": "Color de fuente",
     "font_size": "Tamaño de fuente",
     "format_menu": {
@@ -804,6 +819,7 @@
     "named_styles": "Estilos de celda",
     "percentage": "Formato porcentaje",
     "pivot_table": "Tabla dinámica",
+    "reapply_filters": "Volver a aplicar",
     "redo": "Rehacer",
     "remove_duplicates": "Quitar duplicados",
     "scroll_left": "Desplazar a la izquierda",

@@ -1,6 +1,7 @@
 import {
   ArrowDown,
   ArrowUp,
+  ClipboardPlus,
   Eye,
   EyeOff,
   MoveVertical,
@@ -17,6 +18,9 @@ interface RowHeaderContextMenuProps {
   open: boolean;
   onClose: () => void;
   anchorPosition: { x: number; y: number } | null;
+  // Shown when whole lines have been copied or cut
+  insertCopiedLabel: string | null;
+  onInsertCopied: () => void;
   onInsertRowsAbove: () => void;
   onInsertRowsBelow: () => void;
   onFreezeRows: () => void;
@@ -43,6 +47,8 @@ const RowHeaderContextMenu = (properties: RowHeaderContextMenuProps) => {
     open,
     onClose,
     anchorPosition,
+    insertCopiedLabel,
+    onInsertCopied,
     onInsertRowsAbove,
     onInsertRowsBelow,
     onFreezeRows,
@@ -66,6 +72,11 @@ const RowHeaderContextMenu = (properties: RowHeaderContextMenuProps) => {
 
   return (
     <Menu open={open} onClose={onClose} anchorPosition={anchorPosition}>
+      {insertCopiedLabel ? (
+        <MenuItem icon={<ClipboardPlus />} onClick={onInsertCopied}>
+          {insertCopiedLabel}
+        </MenuItem>
+      ) : null}
       <MenuItem icon={<Plus />} onClick={onInsertRowsAbove}>
         {t("context_menu.row_header.insert_rows_above", { count: rowCount })}
       </MenuItem>

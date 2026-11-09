@@ -60,7 +60,7 @@ export function renderTableMarkers(
     button.style.left = `${left}px`;
     button.style.top = `${top}px`;
     button.textContent = glyph(marker);
-    button.setAttribute("aria-label", marker.column);
+    button.setAttribute("aria-label", marker.label);
     // The sheet must not treat a press on the button as selecting a cell
     button.addEventListener("pointerdown", (event) => event.stopPropagation());
     button.addEventListener("dblclick", (event) => event.stopPropagation());

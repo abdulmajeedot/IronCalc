@@ -53,6 +53,16 @@ impl<'a> Model<'a> {
                 }
             }
         }
+        if let Some(filter) = self.sheet_filter_of(sheet_index) {
+            if let Ok(area) = self.sheet_filter_area(filter) {
+                if area.contains(row, column) {
+                    let name = crate::table::sheet_filter_name(filter.sheet_id);
+                    return self
+                        .table_filter_state(&name)
+                        .is_some_and(|state| !state.columns.is_empty());
+                }
+            }
+        }
         false
     }
 

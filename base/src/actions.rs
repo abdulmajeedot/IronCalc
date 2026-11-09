@@ -18,8 +18,25 @@ use crate::types::{ArrayKind, Cell, FormulaValue, Link, MergedCell, Worksheet};
 #[derive(Clone, Copy)]
 enum CellsMoved {
     None,
-    Rows { sheet: u32, first: i32, delta: i32 },
-    Columns { sheet: u32, first: i32, delta: i32 },
+    Rows {
+        sheet: u32,
+        first: i32,
+        delta: i32,
+    },
+    Columns {
+        sheet: u32,
+        first: i32,
+        delta: i32,
+    },
+    /// Part of the sheet moved: the cells between `span` in the other
+    /// direction, from `first` on.
+    Block {
+        sheet: u32,
+        down: bool,
+        first: i32,
+        span: (i32, i32),
+        delta: i32,
+    },
 }
 
 impl CellsMoved {
@@ -36,6 +53,30 @@ impl CellsMoved {
                 first,
                 delta,
             } if sheet == moved_sheet && column >= first + delta => (row, column - delta),
+            CellsMoved::Block {
+                sheet: moved_sheet,
+                down: true,
+                first,
+                span,
+                delta,
+            } if sheet == moved_sheet
+                && (span.0..=span.1).contains(&column)
+                && row >= first + delta =>
+            {
+                (row - delta, column)
+            }
+            CellsMoved::Block {
+                sheet: moved_sheet,
+                down: false,
+                first,
+                span,
+                delta,
+            } if sheet == moved_sheet
+                && (span.0..=span.1).contains(&row)
+                && column >= first + delta =>
+            {
+                (row, column - delta)
+            }
             _ => (row, column),
         }
     }
@@ -53,6 +94,24 @@ impl CellsMoved {
                 first,
                 delta,
             } if sheet == moved_sheet && column >= first => (row, column + delta),
+            CellsMoved::Block {
+                sheet: moved_sheet,
+                down: true,
+                first,
+                span,
+                delta,
+            } if sheet == moved_sheet && (span.0..=span.1).contains(&column) && row >= first => {
+                (row + delta, column)
+            }
+            CellsMoved::Block {
+                sheet: moved_sheet,
+                down: false,
+                first,
+                span,
+                delta,
+            } if sheet == moved_sheet && (span.0..=span.1).contains(&row) && column >= first => {
+                (row, column + delta)
+            }
             _ => (row, column),
         }
     }
@@ -497,6 +556,105 @@ impl<'a> Model<'a> {
     }
 
     /// Updates the `range` field and formula fields of every CF rule on `sheet` according to `displace_data`.
+    /// Moves part of a sheet to make room for `area`, or back again. Going
+    /// back drops whatever is in `area`, which is expected to be empty.
+    pub(crate) fn shift_cells(
+        &mut self,
+        sheet: u32,
+        area: (i32, i32, i32, i32),
+        down: bool,
+        insert: bool,
+    ) -> Result<(), String> {
+        let (r1, c1, r2, c2) = area;
+        let size = if down { r2 - r1 + 1 } else { c2 - c1 + 1 };
+        let delta = if insert { size } else { -size };
+        let (at, span) = if down { (r1, (c1, c2)) } else { (c1, (r1, r2)) };
+        let along = |row: i32, column: i32| if down { row } else { column };
+        let across = |row: i32, column: i32| if down { column } else { row };
+        let in_zone = |row: i32, column: i32| {
+            along(row, column) >= at && (span.0..=span.1).contains(&across(row, column))
+        };
+        let in_hole = |row: i32, column: i32| !insert && along(row, column) < at + size;
+        let moved_to = |row: i32, column: i32| {
+            if !in_zone(row, column) {
+                Some((row, column))
+            } else if in_hole(row, column) {
+                None
+            } else if down {
+                Some((row + delta, column))
+            } else {
+                Some((row, column + delta))
+            }
+        };
+
+        self.reset_dynamic_array_spills(sheet)?;
+        let worksheet = self.workbook.worksheet_mut(sheet)?;
+        let cells: Vec<(i32, i32, Cell)> = worksheet
+            .sheet_data
+            .cells()
+            .filter(|(row, column, _)| in_zone(*row, *column))
+            .map(|(row, column, cell)| (row, column, cell.into_owned()))
+            .collect();
+        for (row, column, _) in &cells {
+            worksheet.sheet_data.remove_cell(*row, *column);
+        }
+        for (row, column, cell) in cells {
+            if let Some((new_row, new_column)) = moved_to(row, column) {
+                worksheet.update_cell(new_row, new_column, cell)?;
+            }
+        }
+        displace_links(worksheet, moved_to);
+        displace_merged_cells(worksheet, |row1, column1, row2, column2| {
+            if in_zone(row1, column1) && !in_hole(row1, column1) {
+                let (new_row1, new_column1) = moved_to(row1, column1)?;
+                let (new_row2, new_column2) = moved_to(row2, column2)?;
+                Some((new_row1, new_column1, new_row2, new_column2))
+            } else {
+                Some((row1, column1, row2, column2))
+            }
+        });
+
+        let (displace, moved) = if down {
+            (
+                DisplaceData::BlockDown {
+                    sheet,
+                    row: at,
+                    first_column: span.0,
+                    last_column: span.1,
+                    delta,
+                },
+                CellsMoved::Block {
+                    sheet,
+                    down,
+                    first: if insert { at } else { at + size },
+                    span,
+                    delta,
+                },
+            )
+        } else {
+            (
+                DisplaceData::BlockRight {
+                    sheet,
+                    column: at,
+                    first_row: span.0,
+                    last_row: span.1,
+                    delta,
+                },
+                CellsMoved::Block {
+                    sheet,
+                    down,
+                    first: if insert { at } else { at + size },
+                    span,
+                    delta,
+                },
+            )
+        };
+        self.displace_formulas(&displace, moved)?;
+        self.displace_comments(sheet, &displace);
+        self.displace_data_validations(sheet, &displace);
+        Ok(())
+    }
+
     /// Keeps cell comments on their cells when rows or columns move. A comment
     /// on a deleted row or column goes with it.
     fn displace_comments(&mut self, sheet: u32, displace_data: &DisplaceData) {
@@ -538,6 +696,24 @@ impl<'a> Model<'a> {
                 DisplaceData::Column { column, delta, .. } => {
                     shifted(column, delta, cell.column).map(|c| (cell.row, c))
                 }
+                DisplaceData::BlockDown {
+                    row,
+                    first_column,
+                    last_column,
+                    delta,
+                    ..
+                } if (first_column..=last_column).contains(&cell.column) => {
+                    shifted(row, delta, cell.row).map(|r| (r, cell.column))
+                }
+                DisplaceData::BlockRight {
+                    column,
+                    first_row,
+                    last_row,
+                    delta,
+                    ..
+                } if (first_row..=last_row).contains(&cell.row) => {
+                    shifted(column, delta, cell.column).map(|c| (cell.row, c))
+                }
                 DisplaceData::RowMove { row, delta, .. } => {
                     Some((moved(row, delta, cell.row), cell.column))
                 }
@@ -559,6 +735,7 @@ impl<'a> Model<'a> {
     fn displace_cf_ranges(&mut self, sheet: u32, displace_data: &DisplaceData) {
         self.displace_comments(sheet, displace_data);
         self.displace_data_validations(sheet, displace_data);
+        self.displace_sheet_filters(sheet, displace_data);
         match *displace_data {
             DisplaceData::Row { row, delta, .. } => {
                 self.displace_pivots(sheet, true, row, delta);

@@ -1,4 +1,4 @@
-import type { ValidationFailure } from "@ironcalc/wasm";
+import type { Clipboard, ValidationFailure } from "@ironcalc/wasm";
 // This are properties of the workbook that are not permanently stored
 // They only happen at 'runtime' while the workbook is being used:
 //
@@ -86,6 +86,17 @@ export interface EditingCell {
 // Those are styles that are copied
 type AreaStyles = CellStyle[][];
 
+// Cells copied or cut in this workbook, until Escape or typing ends it.
+export interface CopiedCells {
+  type: "copy" | "cut";
+  sheet: number;
+  area: [number, number, number, number];
+  data: Clipboard["data"];
+  // How many whole rows or columns were selected, 0 if it wasn't whole ones
+  wholeRows: number;
+  wholeColumns: number;
+}
+
 // A typed value that broke its cell's rule, waiting for the user's answer.
 export interface ValidationAlert {
   sheet: number;
@@ -102,6 +113,15 @@ export class WorkbookState {
   private cutRange: CutRange | null;
   private selecting: boolean;
   private validationAlert: ValidationAlert | null = null;
+  private copiedCells: CopiedCells | null = null;
+
+  getCopiedCells(): CopiedCells | null {
+    return this.copiedCells;
+  }
+
+  setCopiedCells(copied: CopiedCells | null): void {
+    this.copiedCells = copied;
+  }
 
   getValidationAlert(): ValidationAlert | null {
     return this.validationAlert;

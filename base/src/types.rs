@@ -135,6 +135,10 @@ pub struct Workbook {
     /// Saved next to the workbook, like the pivots.
     #[bitcode(skip)]
     pub data_validations: Vec<crate::data_validation::DataValidation>,
+    /// The filter buttons on plain ranges, at most one per sheet. What they
+    /// filter by is kept in `table_filters`, under the name of the filter.
+    #[bitcode(skip)]
+    pub sheet_filters: Vec<crate::table::SheetFilter>,
 }
 
 /// The sheet on screen when a workbook was saved, and what each sheet showed.

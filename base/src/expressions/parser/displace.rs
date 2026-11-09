@@ -115,6 +115,53 @@ impl Displacement<'_> {
 }
 
 impl Displacement<'_> {
+    /// A range reaching past the block of cells that moved stays as it is,
+    /// as in Excel: only part of it moved.
+    #[allow(clippy::too_many_arguments)]
+    fn block_misses_range(
+        &self,
+        sheet_index: u32,
+        absolute_row1: bool,
+        absolute_column1: bool,
+        row1: i32,
+        column1: i32,
+        absolute_row2: bool,
+        absolute_column2: bool,
+        row2: i32,
+        column2: i32,
+    ) -> bool {
+        let at = |is_absolute: bool, value: i32, origin: i32| {
+            if is_absolute {
+                value
+            } else {
+                value + origin
+            }
+        };
+        match *self.data {
+            DisplaceData::BlockDown {
+                sheet,
+                first_column,
+                last_column,
+                ..
+            } if sheet == sheet_index => {
+                let a = at(absolute_column1, column1, self.from.1);
+                let b = at(absolute_column2, column2, self.from.1);
+                a.min(b) < first_column || a.max(b) > last_column
+            }
+            DisplaceData::BlockRight {
+                sheet,
+                first_row,
+                last_row,
+                ..
+            } if sheet == sheet_index => {
+                let a = at(absolute_row1, row1, self.from.0);
+                let b = at(absolute_row2, row2, self.from.0);
+                a.min(b) < first_row || a.max(b) > last_row
+            }
+            _ => false,
+        }
+    }
+
     /// The two corners of a range in the order the parser keeps them: the
     /// first corner is the top left one. Displacing one end of a range can
     /// put it past the other, `A1:B2` becoming `C1:B2`, and parsing that back
@@ -235,6 +282,20 @@ pub(crate) fn displaced_node(node: &Node, displacement: &Displacement) -> Option
             let full_row = *absolute_row1 && *absolute_row2 && *row1 == 1 && *row2 == LAST_ROW;
             let full_column =
                 *absolute_column1 && *absolute_column2 && *column1 == 1 && *column2 == LAST_COLUMN;
+            let misses_block = displacement.block_misses_range(
+                *sheet_index,
+                *absolute_row1,
+                *absolute_column1,
+                *row1,
+                *column1,
+                *absolute_row2,
+                *absolute_column2,
+                *row2,
+                *column2,
+            );
+            if misses_block && displacement.from == displacement.to {
+                return None;
+            }
             let first = displacement.reference(
                 Some(*sheet_index),
                 *absolute_row1,
