@@ -343,6 +343,8 @@ pub struct Model<'a> {
     /// Evaluated CF results per cell, keyed by (sheet_index, row, column).
     /// Rebuilt from scratch on every call to evaluate_conditional_formatting().
     pub(crate) cf_cache: HashMap<(u32, i32, i32), Vec<CfCellResult>>,
+    /// What drawing needs to know about each table. Rebuilt on every evaluation.
+    pub(crate) table_render: Vec<crate::table::TableRender>,
     /// Dynamic links: links created by formulas like HYPERLINK
     pub(crate) links: HashMap<(u32, i32, i32), Link>,
     /// For each sheet, where each of its shared formulas is. Only an aid to
@@ -1986,6 +1988,7 @@ impl<'a> Model<'a> {
             last_lambda_id: 0,
             evaluation: Evaluation::default(),
             cf_cache: HashMap::new(),
+            table_render: vec![],
             links: HashMap::new(),
         };
 

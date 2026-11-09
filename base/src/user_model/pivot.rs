@@ -103,6 +103,7 @@ impl UserModel<'_> {
             .iter()
             .chain(&pivot.columns)
             .chain(&pivot.filters)
+            .chain(&pivot.slicer_filters)
             .filter_map(|f| Some((data.field_index(&f.field)?, &f.hidden_items)))
             .collect();
         let records: Vec<&Vec<u32>> = data
@@ -117,7 +118,8 @@ impl UserModel<'_> {
             })
             .collect();
 
-        let index = self.model.workbook.worksheets.len() as u32;
+        // Like Excel, the new sheet goes just before the current one
+        let index = sheet;
         self.model.insert_sheet(new_sheet_name, index, None)?;
         self.set_selected_sheet(index)?;
         let header_style = self.pivot_style(PivotCellKind::Header, "")?;
@@ -213,8 +215,9 @@ impl UserModel<'_> {
         overwrite: bool,
     ) -> Result<u32, String> {
         let mut diffs = Vec::new();
+        // Like Excel, a new sheet goes just before the current one
+        let index = self.view.sheet;
         if let Some(name) = new_sheet_name {
-            let index = self.model.workbook.worksheets.len() as u32;
             self.model.insert_sheet(name, index, None)?;
             pivot.sheet_id = self.model.workbook.worksheet(index)?.sheet_id;
             diffs.push(Diff::NewSheet {
@@ -228,12 +231,11 @@ impl UserModel<'_> {
         }
         let result = self.write_pivot(pivot, None, overwrite, diffs);
         if result.is_err() && new_sheet_name.is_some() {
-            let last = self.model.workbook.worksheets.len() as u32 - 1;
-            self.model.delete_sheet(last)?;
-            self.set_selected_sheet(0)?;
+            // The sheet that was current moved up to this position
+            self.model.delete_sheet(index)?;
+            self.set_selected_sheet(index)?;
         }
-        let index = result?;
-        Ok(index as u32)
+        Ok(result? as u32)
     }
 
     /// Replaces the definition of a pivot and rewrites its cells.
@@ -581,6 +583,7 @@ impl UserModel<'_> {
 mod tests {
     #![allow(clippy::unwrap_used)]
 
+    use crate::constants::{LAST_COLUMN, LAST_ROW};
     use crate::pivot::{
         PivotAggregation, PivotArea, PivotCellZone, PivotField, PivotMarkerKind, PivotOptions,
         PivotTable, PivotValue, PIVOT_OVERWRITE_ERROR,
@@ -637,6 +640,7 @@ mod tests {
             output_map: None,
             style_name: String::new(),
             read_only: false,
+            slicer_filters: vec![],
             raw: None,
         }
     }
@@ -677,10 +681,54 @@ mod tests {
             .create_pivot_table(pivot, Some("Pivot"), false)
             .unwrap();
         assert_eq!(model.get_model().workbook.worksheets.len(), 2);
-        assert_eq!(text(&model, 1, 4, 2), "3");
+        assert_eq!(text(&model, 0, 4, 2), "3");
         model.undo().unwrap();
         assert_eq!(model.get_model().workbook.worksheets.len(), 1);
         assert!(model.get_pivot_tables().is_empty());
+    }
+
+    #[test]
+    fn a_new_sheet_goes_before_the_current_one() {
+        let mut model = model();
+        model.new_sheet().unwrap();
+        model.set_selected_sheet(1).unwrap();
+        let mut pivot = definition();
+        pivot.row = 3;
+        pivot.column = 1;
+        model
+            .create_pivot_table(pivot, Some("Pivot"), false)
+            .unwrap();
+        let names = |model: &UserModel| model.get_model().workbook.get_worksheet_names();
+        assert_eq!(names(&model), ["Sheet1", "Pivot", "Sheet2"]);
+        assert_eq!(model.get_selected_view().sheet, 1);
+        assert_eq!(text(&model, 1, 4, 2), "3");
+
+        model.undo().unwrap();
+        assert_eq!(names(&model), ["Sheet1", "Sheet2"]);
+        assert_eq!(model.get_selected_view().sheet, 1);
+
+        model.redo().unwrap();
+        assert_eq!(names(&model), ["Sheet1", "Pivot", "Sheet2"]);
+        assert_eq!(text(&model, 1, 4, 2), "3");
+        assert_eq!(model.get_pivot_tables().len(), 1);
+    }
+
+    #[test]
+    fn a_failed_pivot_removes_its_new_sheet_and_keeps_the_current_one() {
+        let mut model = model();
+        model.new_sheet().unwrap();
+        model.set_selected_sheet(1).unwrap();
+        let mut pivot = definition();
+        pivot.row = LAST_ROW;
+        pivot.column = LAST_COLUMN;
+        assert!(model
+            .create_pivot_table(pivot, Some("Pivot"), false)
+            .is_err());
+        assert_eq!(
+            model.get_model().workbook.get_worksheet_names(),
+            ["Sheet1", "Sheet2"]
+        );
+        assert_eq!(model.get_selected_view().sheet, 1);
     }
 
     #[test]
@@ -819,13 +867,15 @@ mod tests {
         let mut model = model();
         model.create_pivot_table(definition(), None, false).unwrap();
         let sheet = model.show_pivot_details(0, 4, 6, "Details1").unwrap();
-        assert_eq!(sheet, 1);
-        assert_eq!(text(&model, 1, 1, 1), "Region");
-        assert_eq!(text(&model, 1, 2, 1), "East");
-        assert_eq!(text(&model, 1, 3, 2), "2");
-        assert_eq!(text(&model, 1, 4, 1), "");
+        assert_eq!(sheet, 0);
+        assert_eq!(model.get_model().workbook.worksheets[1].name, "Sheet1");
+        assert_eq!(text(&model, 0, 1, 1), "Region");
+        assert_eq!(text(&model, 0, 2, 1), "East");
+        assert_eq!(text(&model, 0, 3, 2), "2");
+        assert_eq!(text(&model, 0, 4, 1), "");
         model.undo().unwrap();
         assert_eq!(model.get_model().workbook.worksheets.len(), 1);
+        assert_eq!(model.get_selected_view().sheet, 0);
     }
 
     #[test]

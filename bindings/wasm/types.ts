@@ -637,6 +637,8 @@ export interface PivotTable {
   output_map?: unknown;
   style_name: string;
   read_only: boolean;
+  /** Fields filtered by a slicer without being part of the layout. */
+  slicer_filters?: PivotField[];
 }
 
 export interface PivotTableEntry {
@@ -644,6 +646,136 @@ export interface PivotTableEntry {
   sheet: number;
   source_sheet: number | null;
   pivot: PivotTable;
+}
+
+export type TableFilterOperator =
+  | "equals"
+  | "not_equals"
+  | "begins_with"
+  | "not_begins_with"
+  | "ends_with"
+  | "not_ends_with"
+  | "contains"
+  | "not_contains"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "between"
+  | "not_between"
+  | "above_average"
+  | "below_average";
+
+export type TableFilterRule =
+  | { type: "values"; visible: string[] }
+  | {
+      type: "condition";
+      operator: TableFilterOperator;
+      value: string;
+      value2: string;
+    }
+  | { type: "top"; count: number; bottom: boolean; percent: boolean };
+
+export interface TableFilterItem {
+  label: string;
+  visible: boolean;
+  has_data: boolean;
+}
+
+export interface TableMarker {
+  table: string;
+  column: string;
+  row: number;
+  col: number;
+  filtered: boolean;
+  sort_descending: boolean | null;
+}
+
+export interface TableStyleSwatch {
+  header_fill: string | null;
+  header_color: string | null;
+  body_fill: string | null;
+  stripe_fill: string | null;
+  line: string | null;
+}
+
+export interface TableOptions {
+  name: string;
+  style_name: string | null;
+  header_row: boolean;
+  total_row: boolean;
+  banded_rows: boolean;
+  banded_columns: boolean;
+  first_column: boolean;
+  last_column: boolean;
+  filter_button: boolean;
+}
+
+export interface TableColumnEntry {
+  name: string;
+  totals_function: string | null;
+  totals_label: string | null;
+  filtered: boolean;
+}
+
+export interface TableEntry {
+  name: string;
+  sheet: number;
+  area: PivotArea;
+  reference: string;
+  columns: TableColumnEntry[];
+  options: TableOptions;
+  filtered: boolean;
+  sort: { column: string; descending: boolean } | null;
+}
+
+export interface SlicerPivot {
+  name: string;
+  sheet_id: number;
+}
+
+export type SlicerSource =
+  | { type: "table"; table: string; column: string }
+  | { type: "pivot"; pivots: SlicerPivot[]; field: string };
+
+export type SlicerPlacement = "move_and_size" | "move" | "free";
+
+export interface Slicer {
+  name: string;
+  caption: string;
+  show_header: boolean;
+  sheet_id: number;
+  source: SlicerSource;
+  row: number;
+  column: number;
+  offset_x: number;
+  offset_y: number;
+  width: number;
+  height: number;
+  button_columns: number;
+  button_height: number;
+  placement: SlicerPlacement;
+  locked: boolean;
+  print: boolean;
+  style: string;
+  alt_text: string;
+  multi_select: boolean;
+}
+
+export interface SlicerConnection {
+  name: string;
+  sheet_id: number;
+  sheet_name: string;
+  connected: boolean;
+}
+
+export interface SlicerEntry {
+  slicer: Slicer;
+  sheet: number;
+  items: TableFilterItem[];
+  filtered: boolean;
+  source_description: string;
+  connections: SlicerConnection[];
 }
 
 export interface PivotFieldInfo {

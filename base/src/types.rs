@@ -124,6 +124,11 @@ pub struct Workbook {
     /// pivots existed still load: see [`crate::pivot::workbook_to_bytes`].
     #[bitcode(skip)]
     pub pivot_tables: Vec<crate::pivot::PivotTable>,
+    /// Saved next to the workbook, like the pivots. See `pivot::workbook_to_bytes`.
+    #[bitcode(skip)]
+    pub table_filters: Vec<crate::table::TableFilterState>,
+    #[bitcode(skip)]
+    pub slicers: Vec<crate::table::Slicer>,
 }
 
 /// A defined name. The `sheet_id` is the sheet index in case the name is local.

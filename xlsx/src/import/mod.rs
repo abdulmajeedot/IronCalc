@@ -3,13 +3,14 @@ mod metadata;
 mod pivot;
 pub(crate) mod shared_strings;
 mod sheet_data;
+mod slicers;
 mod styles;
 mod tables;
 mod theme;
 mod util;
 mod workbook;
 mod worksheets;
-mod xml;
+pub(crate) mod xml;
 
 use std::{
     collections::HashMap,
@@ -124,7 +125,14 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     for dn in &mut workbook.defined_names {
         dn.formula = reparse_formula_hack(&dn.formula, &worksheet_names)?;
     }
-    let pivot_tables = pivot::load_pivots(&mut archive, &rels, &worksheets, &tables);
+    let mut pivot_tables = pivot::load_pivots(&mut archive, &rels, &worksheets, &tables);
+    let (table_filters, slicers) = slicers::load_filters_and_slicers(
+        &mut archive,
+        &rels,
+        &worksheets,
+        &tables,
+        &mut pivot_tables,
+    );
     let metadata = match load_metadata(&mut archive) {
         Ok(metadata) => metadata,
         Err(_) => {
@@ -153,6 +161,8 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         tables,
         theme,
         pivot_tables,
+        table_filters,
+        slicers,
     };
     pivot::paint_imported_pivots(&mut workbook);
     Ok(workbook)

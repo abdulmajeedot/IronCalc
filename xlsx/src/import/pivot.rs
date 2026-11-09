@@ -28,19 +28,19 @@ const RELATIONSHIPS_NS: &str =
 
 type Archive<R> = zip::ZipArchive<R>;
 
-fn read_part<R: Read + Seek>(archive: &mut Archive<R>, path: &str) -> Option<String> {
+pub(super) fn read_part<R: Read + Seek>(archive: &mut Archive<R>, path: &str) -> Option<String> {
     let mut file = archive.by_name(path).ok()?;
     let mut text = String::new();
     file.read_to_string(&mut text).ok()?;
     Some(text)
 }
 
-fn parse_xml(text: &str) -> Option<XmlNode> {
+pub(super) fn parse_xml(text: &str) -> Option<XmlNode> {
     XmlNode::parse(BufReader::new(text.as_bytes())).ok()
 }
 
 /// Resolves a relationship target against the part that holds it.
-fn resolve(base: &str, target: &str) -> String {
+pub(super) fn resolve(base: &str, target: &str) -> String {
     if let Some(absolute) = target.strip_prefix('/') {
         return absolute.to_string();
     }
@@ -66,7 +66,7 @@ fn rels_path(part: &str) -> String {
 }
 
 /// `(id, type, target)` for each relationship of a part.
-fn read_rels<R: Read + Seek>(
+pub(super) fn read_rels<R: Read + Seek>(
     archive: &mut Archive<R>,
     part: &str,
 ) -> Vec<(String, String, String)> {
@@ -748,6 +748,7 @@ fn convert_pivot(
             }),
             style_name,
             read_only,
+            slicer_filters: vec![],
             raw: None,
         },
         page_rows,
@@ -785,7 +786,7 @@ fn load_pivot<R: Read + Seek>(
 }
 
 /// The sheets of the workbook part as `(name, part path)`.
-fn sheet_parts<R: Read + Seek>(
+pub(super) fn sheet_parts<R: Read + Seek>(
     archive: &mut Archive<R>,
     rels: &HashMap<String, Relationship>,
 ) -> Vec<(String, String)> {

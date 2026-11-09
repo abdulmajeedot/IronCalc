@@ -2,6 +2,7 @@ import {
   columnNameFromNumber,
   type Model,
   type PivotMarker,
+  type TableMarker,
 } from "@ironcalc/wasm";
 import {
   forwardRef,
@@ -19,6 +20,16 @@ import {
 } from "../RightDrawer/PivotTable/PivotMenus";
 import { toggleCollapsed } from "../RightDrawer/PivotTable/pivotLogic";
 import { renderPivotMarkers } from "../RightDrawer/PivotTable/pivotMarkers";
+import {
+  SlicerLayer,
+  type SlicerLayerHandle,
+} from "../RightDrawer/Table/SlicerLayer";
+import {
+  type TableDialogState,
+  type TableMenuState,
+  TableMenus,
+} from "../RightDrawer/Table/TableMenus";
+import { renderTableMarkers } from "../RightDrawer/Table/tableMarkers";
 import type { Cell } from "../types";
 import { getEditorSize } from "../util";
 import type { WorkbookActions } from "../Workbook/workbookActions";
@@ -66,6 +77,10 @@ const Worksheet = forwardRef(
       pivotFieldListOpen: boolean;
       onTogglePivotFieldList: () => void;
       onShowPivotSettings: () => void;
+      onTableDialog: (dialog: TableDialogState) => void;
+      onShowTableDesign: () => void;
+      onShowSlicerSettings: (name: string) => void;
+      onSlicerSelected: (name: string) => void;
     },
     ref,
   ) => {
@@ -87,6 +102,11 @@ const Worksheet = forwardRef(
 
     const [cellContextMenuOpen, setCellContextMenuOpen] = useState(false);
     const [pivotMenu, setPivotMenu] = useState<PivotMenuState | null>(null);
+    const [tableMenu, setTableMenu] = useState<TableMenuState | null>(null);
+    const slicerLayer = useRef<SlicerLayerHandle>(null);
+    const tableMarkerAction = useRef<
+      (marker: TableMarker, anchor: DOMRect) => void
+    >(() => {});
     // Read by the marker buttons, which are created outside of React
     const pivotMarkerAction = useRef<
       (marker: PivotMarker, anchor: DOMRect) => void
@@ -282,6 +302,14 @@ const Worksheet = forwardRef(
     const { model, workbookState, refresh, canEdit, actions } = props;
     const canEditRef = useRef(canEdit);
     canEditRef.current = canEdit;
+    tableMarkerAction.current = (marker, anchor) => {
+      setTableMenu({
+        type: "dropdown",
+        marker,
+        x: anchor.left,
+        y: anchor.bottom + 2,
+      });
+    };
     pivotMarkerAction.current = (marker, anchor) => {
       if (marker.kind === "filter") {
         setPivotMenu({
@@ -533,7 +561,11 @@ const Worksheet = forwardRef(
           renderPivotMarkers(canvas, (marker, anchor) =>
             pivotMarkerAction.current(marker, anchor),
           );
+          renderTableMarkers(canvas, (marker, anchor) =>
+            tableMarkerAction.current(marker, anchor),
+          );
         }
+        slicerLayer.current?.update();
       };
       canvas.renderSheet();
       worksheetCanvas.current = canvas;
@@ -803,6 +835,20 @@ const Worksheet = forwardRef(
               });
               return;
             }
+            const tableAtCell = model.getTableAt(
+              selected.sheet,
+              selected.row,
+              selected.column,
+            );
+            if (tableAtCell && canEdit) {
+              setTableMenu({
+                type: "cell",
+                table: tableAtCell.name,
+                x: event.clientX,
+                y: event.clientY,
+              });
+              return;
+            }
             setCellContextMenuOpen(true);
           }}
           onDoubleClick={(event) => {
@@ -838,6 +884,15 @@ const Worksheet = forwardRef(
           }}
         >
           <canvas className="ic-worksheet-sheet-canvas" ref={canvasElement} />
+          <SlicerLayer
+            ref={slicerLayer}
+            model={model}
+            getCanvas={() => worksheetCanvas.current}
+            canEdit={canEdit}
+            refresh={refresh}
+            onShowSettings={props.onShowSlicerSettings}
+            onSelect={props.onSlicerSelected}
+          />
           <div
             className="ic-worksheet-cell-array-structure"
             ref={cellArrayStructure}
@@ -883,6 +938,17 @@ const Worksheet = forwardRef(
             />
           ) : null}
         </div>
+        <TableMenus
+          model={model}
+          state={tableMenu}
+          onClose={() => setTableMenu(null)}
+          refresh={refresh}
+          onCut={actions.cut}
+          onCopy={actions.copy}
+          onPaste={actions.paste}
+          onDialog={props.onTableDialog}
+          onShowDesign={props.onShowTableDesign}
+        />
         <PivotMenus
           model={model}
           state={pivotMenu}

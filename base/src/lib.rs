@@ -40,6 +40,7 @@ pub mod new_empty;
 pub mod number_format;
 pub mod pivot;
 pub mod sheet_data;
+pub mod table;
 pub mod themes;
 pub mod types;
 pub mod worksheet;

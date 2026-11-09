@@ -9,6 +9,7 @@ use crate::{
         Cell, Col, Color, Link, MergedCell, Row, SheetState, Style, StyleIncludes, Theme, Worksheet,
     },
     user_model::pivot::PivotCellDiff,
+    user_model::table::{TableRowDiff, TableSnapshot},
 };
 
 #[derive(Clone, Encode, Decode)]
@@ -333,6 +334,15 @@ pub(crate) enum Diff {
         old_pivots: Vec<PivotTable>,
         new_pivots: Vec<PivotTable>,
         cells: Vec<PivotCellDiff>,
+    },
+    /// Installs the tables, table filters and slicers, and the cells and row
+    /// visibility an edit of them changed.
+    SetTableState {
+        sheet: u32,
+        old: Box<TableSnapshot>,
+        new: Box<TableSnapshot>,
+        cells: Vec<PivotCellDiff>,
+        rows: Vec<TableRowDiff>,
     },
 }
 

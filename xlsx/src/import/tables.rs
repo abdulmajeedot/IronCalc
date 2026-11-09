@@ -104,11 +104,8 @@ pub(crate) fn load_table<R: Read + std::io::Seek>(
         .filter(|n| n.has_tag_name("autoFilter"))
         .collect::<Vec<&XmlNode>>();
 
-    let has_filters = if let Some(filter) = auto_filter.first() {
-        filter.children().count() > 0
-    } else {
-        false
-    };
+    // A table shows filter buttons exactly when it has an autoFilter
+    let has_filters = !auto_filter.is_empty();
 
     // tableColumn
     let table_column = table
@@ -154,11 +151,16 @@ pub(crate) fn load_table<R: Read + std::io::Seek>(
 
         columns.push(TableColumn {
             id,
-            name: column_name.to_string(),
-            totals_row_label: None,
+            name: column_name.replace("_x000a_", "\n"),
+            totals_row_label: table_column
+                .attribute("totalsRowLabel")
+                .map(|s| s.to_string()),
             header_row_dxf_id,
             data_dxf_id,
-            totals_row_function: None,
+            totals_row_function: table_column
+                .attribute("totalsRowFunction")
+                .filter(|f| *f != "none")
+                .map(|s| s.to_string()),
             totals_row_dxf_id,
         });
     }
@@ -166,7 +168,7 @@ pub(crate) fn load_table<R: Read + std::io::Seek>(
     // tableInfo
     let table_info = table
         .descendants()
-        .filter(|n| n.has_tag_name("tableInfo"))
+        .filter(|n| n.has_tag_name("tableStyleInfo"))
         .collect::<Vec<&XmlNode>>();
     let style_info = match table_info.first() {
         Some(node) => {

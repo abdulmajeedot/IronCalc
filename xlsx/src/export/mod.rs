@@ -9,6 +9,7 @@ mod pivot;
 mod shared_strings;
 mod styles;
 mod styles_util;
+mod tables;
 mod theme;
 mod workbook;
 mod workbook_xml_rels;
@@ -32,7 +33,11 @@ use crate::error::XlsxError;
 #[cfg(test)]
 mod test;
 
-fn get_content_types_xml(workbook: &Workbook, pivots: &[pivot::ExportedPivot]) -> String {
+fn get_content_types_xml(
+    workbook: &Workbook,
+    pivots: &[pivot::ExportedPivot],
+    extras: &tables::ExportedExtras,
+) -> String {
     // A list of all files in the zip
     let mut content = vec![
         r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">"#.to_string(),
@@ -50,6 +55,7 @@ fn get_content_types_xml(workbook: &Workbook, pivots: &[pivot::ExportedPivot]) -
     for exported in pivots {
         content.extend(exported.content_types());
     }
+    content.extend(extras.content_types.iter().cloned());
     content.push(
         r#"<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#.to_string(),
     );
@@ -92,8 +98,9 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
 
     // root folder
     zip.start_file("[Content_Types].xml", options)?;
-    let pivots = pivot::export_pivots(model);
-    zip.write_all(get_content_types_xml(workbook, &pivots).as_bytes())?;
+    let mut pivots = pivot::export_pivots(model);
+    let extras = tables::export_extras(model, &mut pivots);
+    zip.write_all(get_content_types_xml(workbook, &pivots, &extras).as_bytes())?;
 
     zip.add_directory("docProps", options)?;
     zip.start_file("docProps/app.xml", options)?;
@@ -113,7 +120,9 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
     zip.start_file("xl/styles.xml", options)?;
     zip.write_all(styles::get_styles_xml(workbook).as_bytes())?;
     zip.start_file("xl/workbook.xml", options)?;
-    zip.write_all(workbook::get_workbook_xml(workbook, selected_sheet, &pivots).as_bytes())?;
+    zip.write_all(
+        workbook::get_workbook_xml(workbook, selected_sheet, &pivots, &extras).as_bytes(),
+    )?;
     zip.start_file("xl/metadata.xml", options)?;
     let metadata_xml = include_str!("metadata.xml");
     zip.write_all(metadata_xml.as_bytes())?;
@@ -124,7 +133,7 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
 
     zip.add_directory("xl/_rels", options)?;
     zip.start_file("xl/_rels/workbook.xml.rels", options)?;
-    zip.write_all(workbook_xml_rels::get_workbook_xml_rels(workbook, &pivots).as_bytes())?;
+    zip.write_all(workbook_xml_rels::get_workbook_xml_rels(workbook, &pivots, &extras).as_bytes())?;
 
     for exported in &pivots {
         for (path, contents) in exported.parts() {
@@ -137,6 +146,11 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
         }
     }
 
+    for (path, contents) in &extras.parts {
+        zip.start_file(path, options)?;
+        zip.write_all(contents.as_bytes())?;
+    }
+
     zip.add_directory("xl/worksheets", options)?;
     // sheet rels parts (one per sheet with external hyperlinks)
     let mut has_worksheet_rels = false;
@@ -146,7 +160,11 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
             .filter(|p| p.sheet_index == sheet_index)
             .map(|p| p.number)
             .collect();
-        if let Some(rels_xml) = worksheets::get_worksheet_xml_rels(worksheet, &sheet_pivots) {
+        if let Some(rels_xml) = worksheets::get_worksheet_xml_rels(
+            worksheet,
+            &sheet_pivots,
+            &extras.sheets[sheet_index],
+        ) {
             if !has_worksheet_rels {
                 zip.add_directory("xl/worksheets/_rels", options)?;
                 has_worksheet_rels = true;
@@ -172,12 +190,20 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
         let max_row = dimension.max_row;
         let sheet_dimension_str = &format!("{column_min_str}{min_row}:{column_max_str}{max_row}");
         let is_sheet_selected = selected_sheet as usize == sheet_index;
+        let pivot_count = pivots
+            .iter()
+            .filter(|p| p.sheet_index == sheet_index)
+            .count();
+        let rel_base = worksheets::worksheet_rel_base(worksheet, pivot_count);
+        let sheet_extras = &extras.sheets[sheet_index];
         zip.write_all(
             worksheets::get_worksheet_xml(
                 worksheet,
                 &model.parsed_formulas[sheet_index],
                 sheet_dimension_str,
                 is_sheet_selected,
+                &sheet_extras.parts_xml(rel_base),
+                &sheet_extras.ext_xml(rel_base),
             )
             .as_bytes(),
         )?;

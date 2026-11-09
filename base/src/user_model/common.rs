@@ -488,6 +488,7 @@ impl<'a> UserModel<'a> {
         }
 
         self.push_diff_list(diff_list);
+        self.auto_expand_table(sheet, row, column, value)?;
         Ok(())
     }
 
@@ -1169,10 +1170,12 @@ impl<'a> UserModel<'a> {
 
         let old_merged_cells = self.model.get_merged_cells(sheet)?.to_vec();
         let pivot_snapshot = self.pivot_snapshot_diff(sheet);
+        let table_snapshot = self.table_snapshot_diff(sheet);
         self.model.delete_rows(sheet, row, row_count)?;
 
         let mut diff_list = self.merged_cells_snapshot_diffs(sheet, old_merged_cells)?;
         diff_list.extend(pivot_snapshot);
+        diff_list.extend(table_snapshot);
         diff_list.extend(link_diffs);
         diff_list.push(Diff::DeleteRows {
             sheet,
@@ -1251,10 +1254,12 @@ impl<'a> UserModel<'a> {
 
         let old_merged_cells = self.model.get_merged_cells(sheet)?.to_vec();
         let pivot_snapshot = self.pivot_snapshot_diff(sheet);
+        let table_snapshot = self.table_snapshot_diff(sheet);
         self.model.delete_columns(sheet, column, column_count)?;
 
         let mut diff_list = self.merged_cells_snapshot_diffs(sheet, old_merged_cells)?;
         diff_list.extend(pivot_snapshot);
+        diff_list.extend(table_snapshot);
         diff_list.extend(link_diffs);
         diff_list.push(Diff::DeleteColumns {
             sheet,

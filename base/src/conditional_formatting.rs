@@ -1132,7 +1132,8 @@ impl<'a> Model<'a> {
         row: i32,
         column: i32,
     ) -> Result<ExtendedStyle, String> {
-        let base = self.get_style_for_cell(sheet, row, column)?;
+        let mut base = self.get_style_for_cell(sheet, row, column)?;
+        self.apply_table_style(sheet, row, column, &mut base);
         let extended = match self.cf_cache.get(&(sheet, row, column)) {
             Some(c) => c,
             None => {

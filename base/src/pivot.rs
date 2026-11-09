@@ -33,6 +33,8 @@ pub const PIVOT_OVERWRITE_ERROR: &str = "PIVOT_OVERWRITE";
 /// Marks saved bytes that carry pivots. A workbook without pivots is saved in
 /// the plain format, so older files and pivot-free files are byte compatible.
 const PIVOT_MAGIC: &[u8; 8] = b"ICPIVOT2";
+/// Adds the filters of tables and the slicers, as JSON, after the pivots.
+const EXTRAS_MAGIC: &[u8; 8] = b"ICSHEET3";
 /// The first format, whose pivots cannot be read any more. Their workbooks
 /// still load, with the pivots' cells as plain values.
 const OLD_PIVOT_MAGIC: &[u8; 8] = b"ICPIVOT1";
@@ -367,6 +369,9 @@ pub struct PivotTable {
     /// True when an imported pivot uses features that cannot be edited here.
     #[serde(default)]
     pub read_only: bool,
+    /// Fields filtered by a slicer without being part of the layout.
+    #[serde(default)]
+    pub slicer_filters: Vec<PivotField>,
     #[serde(skip)]
     pub raw: Option<Box<PivotRaw>>,
 }
@@ -781,7 +786,10 @@ struct SavedPivots {
 /// Encodes a workbook for saving.
 pub fn workbook_to_bytes(workbook: &Workbook) -> Vec<u8> {
     let body = bitcode::encode(workbook);
-    if workbook.pivot_tables.is_empty() {
+    if workbook.pivot_tables.is_empty()
+        && workbook.table_filters.is_empty()
+        && workbook.slicers.is_empty()
+    {
         return body;
     }
     let saved = SavedPivots {
@@ -793,12 +801,40 @@ pub fn workbook_to_bytes(workbook: &Workbook) -> Vec<u8> {
             .collect(),
     };
     let pivots = bitcode::encode(&saved);
-    let mut bytes = Vec::with_capacity(PIVOT_MAGIC.len() + 8 + body.len() + pivots.len());
-    bytes.extend_from_slice(PIVOT_MAGIC);
+    let extras = serde_json::to_string(&SavedExtras {
+        table_filters: workbook.table_filters.clone(),
+        slicers: workbook.slicers.clone(),
+    })
+    .unwrap_or_default();
+    let mut bytes =
+        Vec::with_capacity(EXTRAS_MAGIC.len() + 16 + body.len() + pivots.len() + extras.len());
+    bytes.extend_from_slice(EXTRAS_MAGIC);
     bytes.extend_from_slice(&(body.len() as u64).to_le_bytes());
     bytes.extend_from_slice(&body);
+    bytes.extend_from_slice(&(pivots.len() as u64).to_le_bytes());
     bytes.extend_from_slice(&pivots);
+    bytes.extend_from_slice(extras.as_bytes());
     bytes
+}
+
+#[derive(Serialize, Deserialize)]
+struct SavedExtras {
+    #[serde(default)]
+    table_filters: Vec<crate::table::TableFilterState>,
+    #[serde(default)]
+    slicers: Vec<crate::table::Slicer>,
+}
+
+fn restore_pivots(workbook: &mut Workbook, pivots: &[u8]) -> Result<(), String> {
+    let saved: SavedPivots =
+        bitcode::decode(pivots).map_err(|e| format!("Error parsing workbook: {e}"))?;
+    let mut definitions: Vec<PivotTable> = serde_json::from_str(&saved.definitions)
+        .map_err(|e| format!("Error parsing workbook: {e}"))?;
+    for (pivot, raw) in definitions.iter_mut().zip(saved.raw) {
+        pivot.raw = raw;
+    }
+    workbook.pivot_tables = definitions;
+    Ok(())
 }
 
 fn split_envelope(rest: &[u8]) -> Result<(&[u8], &[u8]), String> {
@@ -818,18 +854,23 @@ pub fn workbook_from_bytes(bytes: &[u8]) -> Result<Workbook, String> {
         let (body, _) = split_envelope(rest)?;
         return bitcode::decode(body).map_err(parse_error);
     }
+    if let Some(rest) = bytes.strip_prefix(EXTRAS_MAGIC) {
+        let (body, rest) = split_envelope(rest)?;
+        let (pivots, extras) = split_envelope(rest)?;
+        let mut workbook: Workbook = bitcode::decode(body).map_err(parse_error)?;
+        restore_pivots(&mut workbook, pivots)?;
+        let extras: SavedExtras =
+            serde_json::from_slice(extras).map_err(|e| format!("Error parsing workbook: {e}"))?;
+        workbook.table_filters = extras.table_filters;
+        workbook.slicers = extras.slicers;
+        return Ok(workbook);
+    }
     let Some(rest) = bytes.strip_prefix(PIVOT_MAGIC) else {
         return bitcode::decode(bytes).map_err(parse_error);
     };
     let (body, pivots) = split_envelope(rest)?;
     let mut workbook: Workbook = bitcode::decode(body).map_err(parse_error)?;
-    let saved: SavedPivots = bitcode::decode(pivots).map_err(parse_error)?;
-    let mut definitions: Vec<PivotTable> = serde_json::from_str(&saved.definitions)
-        .map_err(|e| format!("Error parsing workbook: {e}"))?;
-    for (pivot, raw) in definitions.iter_mut().zip(saved.raw) {
-        pivot.raw = raw;
-    }
-    workbook.pivot_tables = definitions;
+    restore_pivots(&mut workbook, pivots)?;
     Ok(workbook)
 }
 
@@ -960,7 +1001,7 @@ impl AxisContext<'_> {
 }
 
 /// `*` and `?` work as in a spreadsheet filter. The text is already lowercase.
-fn wildcard_match(pattern: &[char], text: &[char]) -> bool {
+pub(crate) fn wildcard_match(pattern: &[char], text: &[char]) -> bool {
     match pattern.first() {
         None => text.is_empty(),
         Some('*') => {
@@ -1147,7 +1188,13 @@ pub fn layout_pivot(pivot: &PivotTable, data: PivotData) -> PivotGrid {
 
     // Items left out by any field of the layout
     let mut hidden: Vec<(usize, Vec<bool>)> = Vec::new();
-    for field in rows.iter().chain(&columns).chain(&filters) {
+    let slicer_only: Vec<&PivotField> = pivot.slicer_filters.iter().filter(known).collect();
+    for field in rows
+        .iter()
+        .chain(&columns)
+        .chain(&filters)
+        .chain(&slicer_only)
+    {
         if field.hidden_items.is_empty() && field.label_filter.is_none() {
             continue;
         }
@@ -2203,6 +2250,7 @@ mod tests {
             output_map: None,
             style_name: String::new(),
             read_only: false,
+            slicer_filters: vec![],
             raw: None,
         }
     }

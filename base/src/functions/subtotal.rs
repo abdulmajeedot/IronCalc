@@ -46,7 +46,10 @@ impl<'a> Model<'a> {
             if let Ok((column1, row1, column2, row2)) = parse_range(&table.reference) {
                 if ((column >= column1) && (column <= column2)) && ((row >= row1) && (row <= row2))
                 {
-                    return table.has_filters;
+                    // Only rows a filter hid count as filtered out
+                    return self
+                        .table_filter_state(&table.name)
+                        .is_some_and(|state| !state.columns.is_empty());
                 }
             }
         }

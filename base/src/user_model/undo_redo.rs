@@ -305,9 +305,9 @@ impl<'a> UserModel<'a> {
                 } => self.model.set_frozen_columns(*sheet, *old_value)?,
                 Diff::NewSheet { index, name: _ } => {
                     self.model.delete_sheet(*index)?;
-                    if *index > 0 {
-                        self.set_selected_sheet(*index - 1)?;
-                    }
+                    // A sheet added before the end leaves its neighbour in its place
+                    let last = self.model.workbook.worksheets.len() as u32 - 1;
+                    self.set_selected_sheet((*index).min(last))?;
                 }
                 Diff::DuplicateSheet {
                     source_index,
@@ -668,6 +668,16 @@ impl<'a> UserModel<'a> {
                 } => {
                     needs_evaluation = true;
                     self.apply_pivot_cells(*sheet, cells, old_pivots, true)?;
+                }
+                Diff::SetTableState {
+                    sheet,
+                    old,
+                    new: _,
+                    cells,
+                    rows,
+                } => {
+                    needs_evaluation = true;
+                    self.apply_table_state(*sheet, cells, rows, old, true)?;
                 }
             }
         }
@@ -1148,6 +1158,16 @@ impl<'a> UserModel<'a> {
                 } => {
                     needs_evaluation = true;
                     self.apply_pivot_cells(*sheet, cells, new_pivots, false)?;
+                }
+                Diff::SetTableState {
+                    sheet,
+                    old: _,
+                    new,
+                    cells,
+                    rows,
+                } => {
+                    needs_evaluation = true;
+                    self.apply_table_state(*sheet, cells, rows, new, false)?;
                 }
             }
         }

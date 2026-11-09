@@ -125,10 +125,23 @@ fn get_tooltip_attribute(tooltip: &Option<String>) -> String {
     }
 }
 
+/// How many relationships a worksheet has before those of its tables and slicers.
+pub(crate) fn worksheet_rel_base(worksheet: &Worksheet, pivots: usize) -> usize {
+    let links = get_sorted_links(worksheet)
+        .iter()
+        .filter(|(_, link)| matches!(link, Link::External { .. }))
+        .count();
+    links + pivots
+}
+
 /// The rels part of the worksheet (`xl/worksheets/_rels/sheetN.xml.rels`) holding one
 /// relationship per external link and per pivot, or `None` if the worksheet has neither.
 /// `pivots` are the part numbers of the pivots on this sheet.
-pub(crate) fn get_worksheet_xml_rels(worksheet: &Worksheet, pivots: &[usize]) -> Option<String> {
+pub(crate) fn get_worksheet_xml_rels(
+    worksheet: &Worksheet,
+    pivots: &[usize],
+    extras: &super::tables::SheetExtras,
+) -> Option<String> {
     let mut relationships_str: Vec<String> = vec![];
     let mut rel_id = 0;
     for (_, link) in get_sorted_links(worksheet) {
@@ -146,6 +159,7 @@ pub(crate) fn get_worksheet_xml_rels(worksheet: &Worksheet, pivots: &[usize]) ->
             "<Relationship Id=\"rId{rel_id}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/pivotTable\" Target=\"../pivotTables/pivotTable{number}.xml\"/>"
         ));
     }
+    relationships_str.extend(extras.rels_xml(rel_id));
     if relationships_str.is_empty() {
         return None;
     }
@@ -192,6 +206,8 @@ pub(crate) fn get_worksheet_xml(
     parsed_formulas: &[(std::sync::Arc<Node>, StaticResult)],
     dimension: &str,
     is_sheet_selected: bool,
+    extra_parts: &str,
+    extra_ext: &str,
 ) -> String {
     let mut sheet_data_str: Vec<String> = vec![];
     let mut cols_str: Vec<String> = vec![];
@@ -677,6 +693,11 @@ pub(crate) fn get_worksheet_xml(
         get_conditional_formatting_xml(&worksheet.conditional_formatting);
 
     let hyperlinks_section = get_hyperlinks_section(worksheet);
+    let ext_lst = match (cf_ext_lst.strip_suffix("</extLst>"), extra_ext.is_empty()) {
+        (_, true) => cf_ext_lst.clone(),
+        (Some(open), false) => format!("{open}{extra_ext}</extLst>"),
+        (None, false) => format!("<extLst>{extra_ext}</extLst>"),
+    };
 
     format!(
         "{XML_DECLARATION}\
@@ -694,7 +715,8 @@ pub(crate) fn get_worksheet_xml(
   {merge_cells_section}\
   {cf_sections}\
   {hyperlinks_section}\
-  {cf_ext_lst}\
+  {extra_parts}\
+  {ext_lst}\
 </worksheet>"
     )
 }

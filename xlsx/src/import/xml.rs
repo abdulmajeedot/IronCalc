@@ -65,8 +65,7 @@ impl XmlNode {
         builder.finish()
     }
 
-    /// Parses a document held in a string; for tests.
-    #[cfg(test)]
+    /// Parses a document held in a string.
     pub(crate) fn parse_str(xml: &str) -> Result<XmlNode, XlsxError> {
         XmlNode::parse(xml.as_bytes())
     }
@@ -123,7 +122,6 @@ impl XmlNode {
     }
 
     /// The first child element with the local name `name`.
-    #[cfg(test)]
     pub(crate) fn child(&self, name: &str) -> Option<&XmlNode> {
         self.children.iter().find(|n| n.has_tag_name(name))
     }

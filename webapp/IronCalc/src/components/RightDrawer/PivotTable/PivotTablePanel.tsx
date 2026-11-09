@@ -74,7 +74,10 @@ interface CreateFormProps extends PivotTablePanelProps {
 }
 
 // The block of data a pivot should start from, as a sheet-qualified range.
-function suggestSource(model: Model, getSelectedArea: () => string): string {
+export function suggestSource(
+  model: Model,
+  getSelectedArea: () => string,
+): string {
   const view = model.getSelectedView();
   const [rowStart, columnStart, rowEnd, columnEnd] = view.range;
   const isWholeSheetAxis = rowEnd === LAST_ROW || columnEnd === LAST_COLUMN;
@@ -175,13 +178,12 @@ const CreateForm = ({
     try {
       model.getPivotFields(sheet, pivot.source);
       model.createPivotTable(pivot, newSheet, overwrite);
-      const after = model.getWorksheetsProperties();
-      const outputSheet = after.findIndex(
-        (w) => w.sheet_id === target.sheet_id,
-      );
-      model.setSelectedSheet(
-        newSheet === null ? outputSheet : after.length - 1,
-      );
+      // A new sheet is selected by createPivotTable
+      if (newSheet === null) {
+        model.setSelectedSheet(
+          worksheets.findIndex((w) => w.sheet_id === target.sheet_id),
+        );
+      }
       model.setSelectedCell(target.row, target.column);
       onUpdate();
     } catch (e) {

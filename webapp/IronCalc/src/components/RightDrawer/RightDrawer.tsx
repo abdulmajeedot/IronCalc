@@ -11,6 +11,9 @@ import NamedRanges from "./NamedRanges/NamedRanges";
 import NamedStylesPanel from "./NamedStyles/NamedStylesPanel";
 import PivotTablePanel from "./PivotTable/PivotTablePanel";
 import RegionalSettings from "./RegionalSettings/RegionalSettings";
+import SlicerSettingsPanel from "./Table/SlicerSettingsPanel";
+import TableDesignPanel from "./Table/TableDesignPanel";
+import type { TableDialogState } from "./Table/TableMenus";
 import Themes from "./Themes/themes";
 import "./rightdrawer.css";
 import { useTranslation } from "react-i18next";
@@ -32,6 +35,8 @@ export type DrawerType =
   | "regionalSettings"
   | "conditionalFormatting"
   | "pivotTable"
+  | "tableDesign"
+  | "slicerSettings"
   | "themes";
 
 interface RightDrawerProps {
@@ -43,6 +48,8 @@ interface RightDrawerProps {
   onUpdate: () => void;
   getSelectedArea: () => string;
   drawerType: DrawerType;
+  slicerName: string | null;
+  onTableDialog: (dialog: TableDialogState) => void;
   // Themes props
   themes: IronCalcTheme[];
   currentTheme: IronCalcTheme;
@@ -74,6 +81,8 @@ const RightDrawer = ({
   model,
   onUpdate,
   drawerType,
+  slicerName,
+  onTableDialog,
   themes,
   currentTheme,
   onThemePicked,
@@ -216,6 +225,24 @@ const RightDrawer = ({
             model={model}
             onUpdate={onUpdate}
             getSelectedArea={getSelectedArea}
+          />
+        );
+      case "tableDesign":
+        return (
+          <TableDesignPanel
+            model={model}
+            onClose={onClose}
+            onUpdate={onUpdate}
+            onDialog={onTableDialog}
+          />
+        );
+      case "slicerSettings":
+        return (
+          <SlicerSettingsPanel
+            model={model}
+            name={slicerName}
+            onClose={onClose}
+            onUpdate={onUpdate}
           />
         );
       case "themes":

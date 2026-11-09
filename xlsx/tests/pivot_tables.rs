@@ -70,6 +70,7 @@ fn definition() -> PivotTable {
         output_map: None,
         style_name: String::new(),
         read_only: false,
+        slicer_filters: vec![],
         raw: None,
     }
 }
@@ -106,7 +107,7 @@ fn a_new_pivot_survives_export_and_import() {
     let workbook_xml = part(&bytes, "xl/workbook.xml");
     assert!(workbook_xml.contains("<pivotCache cacheId=\"1\""));
     assert!(part(&bytes, "[Content_Types].xml").contains("/xl/pivotTables/pivotTable1.xml"));
-    assert!(part(&bytes, "xl/worksheets/_rels/sheet2.xml.rels").contains("pivotTable1.xml"));
+    assert!(part(&bytes, "xl/worksheets/_rels/sheet1.xml.rels").contains("pivotTable1.xml"));
     let cache = part(&bytes, "xl/pivotCache/pivotCacheDefinition1.xml");
     assert!(cache.contains("refreshOnLoad=\"1\""));
     assert!(cache.contains("sheet=\"Sheet1\""));
@@ -118,7 +119,7 @@ fn a_new_pivot_survives_export_and_import() {
     assert!(!pivot.read_only);
     assert_eq!(
         pivot.sheet_id,
-        model.get_model().workbook.worksheets[1].sheet_id
+        model.get_model().workbook.worksheets[0].sheet_id
     );
     assert_eq!(pivot.rows, vec![field("Region")]);
     assert_eq!(pivot.columns, vec![field("Product")]);
@@ -181,8 +182,8 @@ fn an_imported_pivot_follows_a_moved_output_and_renamed_source() {
     let bytes = export(model.get_model());
 
     let mut imported = UserModel::from_model(import(&bytes));
-    imported.insert_rows(1, 1, 2).unwrap();
-    imported.rename_sheet(0, "Data").unwrap();
+    imported.insert_rows(0, 1, 2).unwrap();
+    imported.rename_sheet(1, "Data").unwrap();
     let again = export(imported.get_model());
     assert!(part(&again, "xl/pivotTables/pivotTable1.xml").contains("<location ref=\"A5:"));
     let cache = part(&again, "xl/pivotCache/pivotCacheDefinition1.xml");
@@ -248,7 +249,7 @@ fn without_cell_formatting(bytes: &[u8]) -> Vec<u8> {
         let name = file.name().unwrap().to_string();
         let mut contents = Vec::new();
         file.read_to_end(&mut contents).unwrap();
-        if name == "xl/worksheets/sheet2.xml" {
+        if name == "xl/worksheets/sheet1.xml" {
             let mut text = String::from_utf8(contents).unwrap();
             while let Some(start) = text.find(" s=\"") {
                 let end = start + 4 + text[start + 4..].find('"').unwrap();
@@ -282,8 +283,8 @@ fn nested_pivot() -> Vec<u8> {
 #[test]
 fn a_pivot_saved_by_another_app_looks_like_a_pivot_when_opened() {
     let imported = import(&nested_pivot());
-    let style = |row, column| imported.get_style_for_cell(1, row, column).unwrap();
-    let text = |row, column| imported.get_formatted_cell_value(1, row, column).unwrap();
+    let style = |row, column| imported.get_style_for_cell(0, row, column).unwrap();
+    let text = |row, column| imported.get_formatted_cell_value(0, row, column).unwrap();
 
     // Header, parent with its value, indented child, grand total
     assert!(style(3, 1).font.b);
@@ -305,7 +306,7 @@ fn a_pivot_saved_by_another_app_looks_like_a_pivot_when_opened() {
 fn opening_a_pivot_twice_does_not_indent_it_twice() {
     let imported = import(&nested_pivot());
     let again = import(&export(&imported));
-    assert_eq!(again.get_formatted_cell_value(1, 5, 1).unwrap(), "  Chair");
+    assert_eq!(again.get_formatted_cell_value(0, 5, 1).unwrap(), "  Chair");
 }
 
 #[test]

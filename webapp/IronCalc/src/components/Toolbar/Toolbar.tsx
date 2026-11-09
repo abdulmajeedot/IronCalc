@@ -30,6 +30,7 @@ import {
   Italic,
   Layers,
   Link2,
+  ListFilter,
   Minus,
   PaintBucket,
   PaintRoller,
@@ -41,6 +42,7 @@ import {
   Rows3,
   Strikethrough,
   SwatchBook,
+  Table2,
   TableCellsMerge,
   TableCellsSplit,
   TableProperties,
@@ -125,6 +127,10 @@ type ToolbarProperties = {
   isConditionalFormattingOpen: boolean;
   onOpenPivotTable: () => void;
   isPivotTableOpen: boolean;
+  onOpenTable: () => void;
+  isTableOpen: boolean;
+  onInsertSlicer: () => void;
+  canInsertSlicer: boolean;
   onOpenNamedStyles: () => void;
   isNamedStylesOpen: boolean;
   onOpenLinkDialog: () => void;
@@ -511,6 +517,23 @@ function Toolbar(properties: ToolbarProperties) {
               pressed={properties.isPivotTableOpen}
               onClick={properties.onOpenPivotTable}
               disabled={!canEdit}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.table")}>
+            <IconButton
+              icon={<Table2 />}
+              aria-label={t("toolbar.table")}
+              pressed={properties.isTableOpen}
+              onClick={properties.onOpenTable}
+              disabled={!canEdit}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.slicer")}>
+            <IconButton
+              icon={<ListFilter />}
+              aria-label={t("toolbar.slicer")}
+              onClick={properties.onInsertSlicer}
+              disabled={!canEdit || !properties.canInsertSlicer}
             />
           </Tooltip>
           <ThemeMenu

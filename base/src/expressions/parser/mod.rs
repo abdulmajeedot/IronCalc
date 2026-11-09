@@ -337,6 +337,10 @@ impl<'a> Parser<'a> {
         self.lexer.set_language(language);
     }
 
+    pub fn set_tables(&mut self, tables: HashMap<String, Table>) {
+        self.tables = tables;
+    }
+
     pub fn set_worksheets_and_names(
         &mut self,
         worksheets: Vec<String>,

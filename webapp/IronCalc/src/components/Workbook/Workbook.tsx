@@ -27,6 +27,10 @@ import RightDrawer, {
   DEFAULT_DRAWER_WIDTH,
   type DrawerType,
 } from "../RightDrawer/RightDrawer";
+import {
+  type TableDialogState,
+  TableDialogs,
+} from "../RightDrawer/Table/TableMenus";
 import SheetTabBar from "../SheetTabBar";
 import Toolbar, { type MergeCellsOperation } from "../Toolbar/Toolbar";
 import {
@@ -105,6 +109,8 @@ const Workbook = (
   // The field panel follows the selection: it opens on entering a PivotTable
   // and closes on leaving one, unless the user opened it with the toolbar.
   const pivotPanelFollowsSelection = useRef(false);
+  const [tableDialog, setTableDialog] = useState<TableDialogState | null>(null);
+  const [slicerName, setSlicerName] = useState<string | null>(null);
   // Set when the user hides the field list from a pivot's right-click menu
   const pivotFieldListHidden = useRef(false);
   const selectedForPivot = model.getSelectedView();
@@ -114,6 +120,13 @@ const Workbook = (
         selectedForPivot.row,
         selectedForPivot.column,
       ) ?? null)
+    : null;
+  const tableAtSelection = canEdit
+    ? model.getTableAt(
+        selectedForPivot.sheet,
+        selectedForPivot.row,
+        selectedForPivot.column,
+      )
     : null;
   useEffect(() => {
     if (pivotAtSelection !== null) {
@@ -1138,6 +1151,24 @@ const Workbook = (
             openDrawer("pivotTable");
           }}
           isPivotTableOpen={isDrawerOpen && drawerType === "pivotTable"}
+          onOpenTable={() => {
+            if (tableAtSelection) {
+              openDrawer("tableDesign");
+            } else {
+              setTableDialog({ kind: "create" });
+            }
+          }}
+          isTableOpen={isDrawerOpen && drawerType === "tableDesign"}
+          canInsertSlicer={
+            tableAtSelection !== null || pivotAtSelection !== null
+          }
+          onInsertSlicer={() =>
+            setTableDialog({
+              kind: "slicers",
+              table: tableAtSelection?.name ?? null,
+              pivot: pivotAtSelection,
+            })
+          }
           onOpenNamedStyles={actions.openNamedStyles}
           isNamedStylesOpen={isDrawerOpen && drawerType === "namedStyles"}
           onOpenLinkDialog={actions.openLinkDialog}
@@ -1187,6 +1218,13 @@ const Workbook = (
               openDrawer("pivotTable");
             }
           }}
+          onTableDialog={setTableDialog}
+          onShowTableDesign={() => openDrawer("tableDesign")}
+          onShowSlicerSettings={(name) => {
+            setSlicerName(name);
+            openDrawer("slicerSettings");
+          }}
+          onSlicerSelected={setSlicerName}
           onShowPivotSettings={() => {
             pivotFieldListHidden.current = false;
             openDrawer("pivotTable");
@@ -1277,6 +1315,19 @@ const Workbook = (
           model={model}
         />
       </div>
+      <TableDialogs
+        model={model}
+        state={tableDialog}
+        onClose={() => setTableDialog(null)}
+        refresh={() => setRedrawId((id) => id + 1)}
+        getSelectedArea={() => {
+          const worksheetNames = model
+            .getWorksheetsProperties()
+            .map((s) => s.name);
+          const selectedView = model.getSelectedView();
+          return getFullRangeToString(selectedView, worksheetNames);
+        }}
+      />
       <RightDrawer
         isOpen={isDrawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -1294,6 +1345,8 @@ const Workbook = (
           return getFullRangeToString(selectedView, worksheetNames);
         }}
         drawerType={drawerType}
+        slicerName={slicerName}
+        onTableDialog={setTableDialog}
         themes={themes}
         currentTheme={model.getTheme()}
         onThemePicked={handleThemePicked}

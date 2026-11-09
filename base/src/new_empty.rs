@@ -519,6 +519,12 @@ impl<'a> Model<'a> {
 
         // Update the name of the worksheet
         self.workbook.worksheet_mut(sheet_index)?.set_name(new_name);
+        for table in self.workbook.tables.values_mut() {
+            if table.sheet_name == old_name {
+                table.sheet_name = new_name.to_string();
+            }
+        }
+        self.sync_table_parser();
         self.reset_parsed_structures();
         Ok(())
     }
@@ -658,6 +664,8 @@ impl<'a> Model<'a> {
             tables: HashMap::new(),
             theme: Default::default(),
             pivot_tables: vec![],
+            table_filters: vec![],
+            slicers: vec![],
         };
         let parsed_formulas = Vec::new();
         let worksheets = &workbook.worksheets;
@@ -680,6 +688,7 @@ impl<'a> Model<'a> {
             last_lambda_id: 0,
             evaluation: crate::evaluation::Evaluation::default(),
             cf_cache: HashMap::new(),
+            table_render: vec![],
             links: HashMap::new(),
         };
         model.parse_formulas();

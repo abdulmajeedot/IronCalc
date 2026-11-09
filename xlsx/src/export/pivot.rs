@@ -13,7 +13,7 @@ use ironcalc_base::pivot::{
     FieldData, PivotAggregation, PivotArea, PivotData, PivotField, PivotGrid, PivotItem,
     PivotLabelCondition, PivotLabelFilter, PivotLayout, PivotLine, PivotLineKind, PivotShowAs,
     PivotSortOrder, PivotSubtotals, PivotTable, PivotTopUnit, PivotValueCondition,
-    PivotValueFilter, PivotValueRule,
+    PivotValueFilter, PivotValueRule, BLANK_ITEM_LABEL,
 };
 use ironcalc_base::types::Workbook;
 use ironcalc_base::Model;
@@ -35,6 +35,8 @@ pub(crate) struct ExportedPivot {
     /// 1-based, used in the part names and as the cache id.
     pub(crate) number: usize,
     pub(crate) sheet_index: usize,
+    name: String,
+    sheet_id: u32,
     table_xml: String,
     cache_xml: String,
     records_xml: Option<String>,
@@ -42,6 +44,55 @@ pub(crate) struct ExportedPivot {
 }
 
 impl ExportedPivot {
+    pub(crate) fn is_named(&self, name: &str, sheet_id: u32) -> bool {
+        self.name == name && self.sheet_id == sheet_id
+    }
+
+    /// The labels of a cache field, in the order a slicer refers to them.
+    pub(crate) fn shared_labels(&self, field: &str) -> Vec<String> {
+        let Ok(cache) = crate::import::xml::XmlNode::parse_str(&self.cache_xml) else {
+            return vec![];
+        };
+        let Some(definition) = cache
+            .descendants()
+            .find(|n| n.has_tag_name("cacheField") && n.attribute("name") == Some(field))
+        else {
+            return vec![];
+        };
+        let Some(shared) = definition.child("sharedItems") else {
+            return vec![];
+        };
+        shared
+            .children()
+            .map(|item| item.attribute("v").unwrap_or(BLANK_ITEM_LABEL).to_string())
+            .collect()
+    }
+
+    /// The id slicers use to find this cache, added to the cache if it has none.
+    pub(crate) fn slicer_cache_id(&mut self) -> usize {
+        const MARKER: &str = "pivotCacheId=\"";
+        if let Some(start) = self.cache_xml.find(MARKER) {
+            let digits: String = self.cache_xml[start + MARKER.len()..]
+                .chars()
+                .take_while(char::is_ascii_digit)
+                .collect();
+            if let Ok(id) = digits.parse() {
+                return id;
+            }
+        }
+        let id = self.number;
+        let extension = format!(
+            "<ext uri=\"{{725AE2AE-9491-48be-B2B4-4EB974FC3084}}\" xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotCacheDefinition pivotCacheId=\"{id}\"/></ext>"
+        );
+        if let Some(end) = self.cache_xml.rfind("</extLst>") {
+            self.cache_xml.insert_str(end, &extension);
+        } else if let Some(end) = self.cache_xml.rfind("</pivotCacheDefinition>") {
+            self.cache_xml
+                .insert_str(end, &format!("<extLst>{extension}</extLst>"));
+        }
+        id
+    }
+
     pub(crate) fn content_types(&self) -> Vec<String> {
         let n = self.number;
         let mut types = vec![
@@ -256,6 +307,8 @@ fn export_raw(
     Some(ExportedPivot {
         number,
         sheet_index,
+        name: pivot.name.clone(),
+        sheet_id: pivot.sheet_id,
         table_xml,
         cache_xml,
         records_xml,
@@ -345,6 +398,7 @@ fn axis_fields(pivot: &PivotTable, data: &PivotData) -> Vec<bool> {
                 .iter()
                 .chain(&pivot.columns)
                 .chain(&pivot.filters)
+                .chain(&pivot.slicer_filters)
                 .any(|f| f.field == field.name)
         })
         .collect()
@@ -461,6 +515,8 @@ fn pivot_field_xml(pivot: &PivotTable, field: &FieldData) -> String {
         ("axisCol", Some(&pivot.columns[i]))
     } else if let Some(i) = find(&pivot.filters) {
         ("axisPage", Some(&pivot.filters[i]))
+    } else if let Some(i) = find(&pivot.slicer_filters) {
+        ("", Some(&pivot.slicer_filters[i]))
     } else {
         ("", None)
     };
@@ -1067,6 +1123,8 @@ fn export_generated(
     Some(ExportedPivot {
         number,
         sheet_index,
+        name: pivot.name.clone(),
+        sheet_id: pivot.sheet_id,
         table_xml: table_xml(pivot, &grid, number),
         cache_xml: cache,
         records_xml: Some(records),

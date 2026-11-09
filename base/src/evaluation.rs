@@ -549,6 +549,7 @@ impl<'a> Model<'a> {
             self.restore_dynamic_spills(&spills_before);
         }
         self.evaluation.restarts_in_last_evaluation = log.restarts;
+        self.sync_tables();
         self.evaluate_conditional_formatting();
     }
 

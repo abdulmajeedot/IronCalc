@@ -124,7 +124,7 @@ interface ChecklistProps {
 }
 
 // The searchable list of items with Select All.
-const Checklist = ({
+export const Checklist = ({
   items,
   hidden: initial,
   onApply,
@@ -209,7 +209,7 @@ interface DialogShellProps {
   children: React.ReactNode;
 }
 
-const DialogShell = ({
+export const DialogShell = ({
   title,
   onClose,
   onConfirm,

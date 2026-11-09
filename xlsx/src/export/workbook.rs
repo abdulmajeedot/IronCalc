@@ -42,6 +42,7 @@ pub(crate) fn get_workbook_xml(
     workbook: &Workbook,
     selected_sheet: u32,
     pivots: &[super::pivot::ExportedPivot],
+    extras: &super::tables::ExportedExtras,
 ) -> String {
     // sheets
     // <sheet name="Sheet1" sheetId="1" r:id="rId1"/>
@@ -122,8 +123,9 @@ pub(crate) fn get_workbook_xml(
     }
 
     let sheets = sheets_str.join("");
-    let defined_names = defined_names_str.join("");
+    let defined_names = defined_names_str.join("") + &extras.defined_names_xml();
     let pivot_caches = super::pivot::pivot_caches_xml(workbook, pivots);
+    let ext_lst = extras.workbook_ext_xml(workbook, pivots);
     format!("{XML_DECLARATION}\n\
     <workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
     <bookViews>
@@ -137,5 +139,6 @@ pub(crate) fn get_workbook_xml(
       </definedNames>\
       <calcPr/>\
       {pivot_caches}\
+      {ext_lst}\
     </workbook>")
 }

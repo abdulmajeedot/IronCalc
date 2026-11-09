@@ -499,9 +499,13 @@ impl<'a> Model<'a> {
     /// Updates the `range` field and formula fields of every CF rule on `sheet` according to `displace_data`.
     fn displace_cf_ranges(&mut self, sheet: u32, displace_data: &DisplaceData) {
         match *displace_data {
-            DisplaceData::Row { row, delta, .. } => self.displace_pivots(sheet, true, row, delta),
+            DisplaceData::Row { row, delta, .. } => {
+                self.displace_pivots(sheet, true, row, delta);
+                self.displace_tables(sheet, true, row, delta);
+            }
             DisplaceData::Column { column, delta, .. } => {
-                self.displace_pivots(sheet, false, column, delta)
+                self.displace_pivots(sheet, false, column, delta);
+                self.displace_tables(sheet, false, column, delta);
             }
             _ => {}
         }

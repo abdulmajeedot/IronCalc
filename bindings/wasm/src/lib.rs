@@ -124,6 +124,14 @@ fn leak_str(s: &str) -> &'static str {
     Box::leak(s.to_owned().into_boxed_str())
 }
 
+fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
+    serde_wasm_bindgen::to_value(value).map_err(|e| to_js_error(e.to_string()))
+}
+
+fn from_js<T: serde::de::DeserializeOwned>(value: JsValue) -> Result<T, JsError> {
+    serde_wasm_bindgen::from_value(value).map_err(|e| to_js_error(e.to_string()))
+}
+
 #[wasm_bindgen]
 pub struct Model {
     model: BaseModel<'static>,
@@ -1403,6 +1411,240 @@ impl Model {
         self.model
             .delete_pivot_table(index)
             .map_err(|e| to_js_error(e.to_string()))
+    }
+
+    // -----------------------------------------------------------------------
+    // Tables and slicers
+    // -----------------------------------------------------------------------
+
+    #[wasm_bindgen(js_name = "getTables", unchecked_return_type = "TableEntry[]")]
+    pub fn get_tables(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_tables(sheet))
+    }
+
+    #[wasm_bindgen(js_name = "getTableAt", unchecked_return_type = "TableEntry | null")]
+    pub fn get_table_at(&self, sheet: u32, row: i32, column: i32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_table_at(sheet, row, column))
+    }
+
+    #[wasm_bindgen(js_name = "getTableMarkers", unchecked_return_type = "TableMarker[]")]
+    pub fn get_table_markers(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_table_markers(sheet))
+    }
+
+    #[wasm_bindgen(
+        js_name = "getTableStyleSwatch",
+        unchecked_return_type = "TableStyleSwatch | null"
+    )]
+    pub fn get_table_style_swatch(&self, name: &str) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_table_style_swatch(name))
+    }
+
+    #[wasm_bindgen(
+        js_name = "getTableFilterItems",
+        unchecked_return_type = "TableFilterItem[]"
+    )]
+    pub fn get_table_filter_items(&self, table: &str, column: &str) -> Result<JsValue, JsError> {
+        to_js(
+            &self
+                .model
+                .get_table_filter_items(table, column)
+                .map_err(to_js_error)?,
+        )
+    }
+
+    #[wasm_bindgen(
+        js_name = "getTableFilter",
+        unchecked_return_type = "TableFilterRule | null"
+    )]
+    pub fn get_table_filter(&self, table: &str, column: &str) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_table_filter(table, column))
+    }
+
+    #[wasm_bindgen(js_name = "createTable")]
+    pub fn create_table(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+        has_headers: bool,
+        style_name: Option<String>,
+    ) -> Result<String, JsError> {
+        let area = from_js(area)?;
+        self.model
+            .create_table(sheet, area, has_headers, style_name)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setTableOptions")]
+    pub fn set_table_options(
+        &mut self,
+        name: &str,
+        #[wasm_bindgen(unchecked_param_type = "TableOptions")] options: JsValue,
+    ) -> Result<(), JsError> {
+        let options = from_js(options)?;
+        self.model
+            .set_table_options(name, options)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "resizeTable")]
+    pub fn resize_table(
+        &mut self,
+        name: &str,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+    ) -> Result<(), JsError> {
+        let area = from_js(area)?;
+        self.model.resize_table(name, area).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setTableTotalFunction")]
+    pub fn set_table_total_function(
+        &mut self,
+        name: &str,
+        column: &str,
+        function: Option<String>,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_table_total_function(name, column, function)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setTableFilter")]
+    pub fn set_table_filter(
+        &mut self,
+        name: &str,
+        column: &str,
+        #[wasm_bindgen(unchecked_param_type = "TableFilterRule | null")] rule: JsValue,
+    ) -> Result<(), JsError> {
+        let rule = from_js(rule)?;
+        self.model
+            .set_table_filter(name, column, rule)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "clearTableFilters")]
+    pub fn clear_table_filters(&mut self, name: &str) -> Result<(), JsError> {
+        self.model.clear_table_filters(name).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "sortTable")]
+    pub fn sort_table(
+        &mut self,
+        name: &str,
+        column: &str,
+        descending: bool,
+    ) -> Result<(), JsError> {
+        self.model
+            .sort_table(name, column, descending)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "convertTableToRange")]
+    pub fn convert_table_to_range(&mut self, name: &str) -> Result<(), JsError> {
+        self.model.convert_table_to_range(name).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "insertTableRow")]
+    pub fn insert_table_row(&mut self, name: &str, row: i32) -> Result<(), JsError> {
+        self.model.insert_table_row(name, row).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "deleteTableRow")]
+    pub fn delete_table_row(&mut self, name: &str, row: i32) -> Result<(), JsError> {
+        self.model.delete_table_row(name, row).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "insertTableColumn")]
+    pub fn insert_table_column(&mut self, name: &str, column: i32) -> Result<(), JsError> {
+        self.model
+            .insert_table_column(name, column)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "deleteTableColumn")]
+    pub fn delete_table_column(&mut self, name: &str, column: i32) -> Result<(), JsError> {
+        self.model
+            .delete_table_column(name, column)
+            .map_err(to_js_error)
+    }
+
+    /// Returns `[removed, remaining]`.
+    #[wasm_bindgen(js_name = "removeTableDuplicates")]
+    pub fn remove_table_duplicates(
+        &mut self,
+        name: &str,
+        columns: Vec<String>,
+    ) -> Result<Vec<u32>, JsError> {
+        let (removed, remaining) = self
+            .model
+            .remove_table_duplicates(name, &columns)
+            .map_err(to_js_error)?;
+        Ok(vec![removed, remaining])
+    }
+
+    #[wasm_bindgen(js_name = "getSlicers", unchecked_return_type = "SlicerEntry[]")]
+    pub fn get_slicers(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_slicers(sheet))
+    }
+
+    #[wasm_bindgen(js_name = "createTableSlicers")]
+    pub fn create_table_slicers(
+        &mut self,
+        name: &str,
+        columns: Vec<String>,
+    ) -> Result<Vec<String>, JsError> {
+        self.model
+            .create_table_slicers(name, &columns)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "createPivotSlicers")]
+    pub fn create_pivot_slicers(
+        &mut self,
+        index: u32,
+        fields: Vec<String>,
+    ) -> Result<Vec<String>, JsError> {
+        self.model
+            .create_pivot_slicers(index, &fields)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "updateSlicer")]
+    pub fn update_slicer(
+        &mut self,
+        name: &str,
+        #[wasm_bindgen(unchecked_param_type = "Slicer")] slicer: JsValue,
+    ) -> Result<(), JsError> {
+        let slicer = from_js(slicer)?;
+        self.model.update_slicer(name, slicer).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "deleteSlicer")]
+    pub fn delete_slicer(&mut self, name: &str) -> Result<(), JsError> {
+        self.model.delete_slicer(name).map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setSlicerSelection")]
+    pub fn set_slicer_selection(
+        &mut self,
+        name: &str,
+        selected: Vec<String>,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_slicer_selection(name, &selected)
+            .map_err(to_js_error)
+    }
+
+    #[wasm_bindgen(js_name = "setSlicerConnections")]
+    pub fn set_slicer_connections(
+        &mut self,
+        name: &str,
+        #[wasm_bindgen(unchecked_param_type = "SlicerPivot[]")] links: JsValue,
+    ) -> Result<(), JsError> {
+        let links = from_js(links)?;
+        self.model
+            .set_slicer_connections(name, links)
+            .map_err(to_js_error)
     }
 
     // -----------------------------------------------------------------------
