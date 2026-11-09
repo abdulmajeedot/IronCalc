@@ -23,7 +23,7 @@ use chrono::{Datelike, Duration, Months, NaiveDate};
 // ---------------------------------------------------------------------------
 
 /// Parses a space-separated sqref like "A1:C3 E5" into a list of (row1,col1,row2,col2) tuples.
-fn parse_sqref(sqref: &str) -> Vec<(i32, i32, i32, i32)> {
+pub(crate) fn parse_sqref(sqref: &str) -> Vec<(i32, i32, i32, i32)> {
     sqref
         .split_whitespace()
         .filter_map(parse_range_part)

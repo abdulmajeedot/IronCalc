@@ -13,7 +13,14 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
+import { enterCellInput } from "../DataTools/enterCellInput";
+import {
+  cellHasDropdown,
+  renderValidationOverlay,
+} from "../DataTools/validationOverlay";
 import Editor from "../Editor/Editor";
+import { Menu } from "../Menu/Menu";
+import { MenuItem } from "../Menu/MenuItem";
 import {
   type PivotMenuState,
   PivotMenus,
@@ -326,6 +333,36 @@ const Worksheet = forwardRef(
           : next,
       );
     };
+    const [validationMenu, setValidationMenu] = useState<{
+      x: number;
+      y: number;
+      sheet: number;
+      row: number;
+      column: number;
+      items: string[];
+      current: string;
+    } | null>(null);
+    const openValidationList = (): boolean => {
+      const canvas = worksheetCanvas.current;
+      if (!canvas || !canEdit || !cellHasDropdown(model)) {
+        return false;
+      }
+      const { sheet, row, column } = model.getSelectedView();
+      const cell = canvas.getCellRect(row, column);
+      const bounds = canvas.canvas.getBoundingClientRect();
+      setValidationMenu({
+        x: bounds.left + cell.x,
+        y: bounds.top + cell.y + cell.height + 2,
+        sheet,
+        row,
+        column,
+        items: model.getDataValidationItems(sheet, row, column),
+        current: model.getFormattedCellValue(sheet, row, column),
+      });
+      return true;
+    };
+    const openValidationListRef = useRef(openValidationList);
+    openValidationListRef.current = openValidationList;
     const editNote = (): void => {
       const { sheet, row, column } = model.getSelectedView();
       const note = model.getComment(sheet, row, column);
@@ -408,6 +445,7 @@ const Worksheet = forwardRef(
     useImperativeHandle(ref, () => ({
       getCanvas: () => worksheetCanvas.current,
       editNote,
+      openValidationList,
     }));
 
     useEffect(() => {
@@ -632,6 +670,11 @@ const Worksheet = forwardRef(
           );
         }
         slicerLayer.current?.update();
+        renderValidationOverlay(canvas, {
+          canEdit: canEditRef.current,
+          isEditing: workbookState.getEditingCell() !== null,
+          onOpenList: () => openValidationListRef.current(),
+        });
         if (noteHover) {
           placeCellNote(
             noteHoverElement.current,
@@ -1039,6 +1082,35 @@ const Worksheet = forwardRef(
             />
           ) : null}
         </div>
+        {validationMenu ? (
+          <Menu
+            open
+            onClose={() => setValidationMenu(null)}
+            anchorPosition={{ x: validationMenu.x, y: validationMenu.y }}
+          >
+            {validationMenu.items.map((item) => (
+              <MenuItem
+                key={item}
+                checked={item === validationMenu.current}
+                onClick={() => {
+                  const { sheet, row, column } = validationMenu;
+                  setValidationMenu(null);
+                  enterCellInput(
+                    model,
+                    workbookState,
+                    sheet,
+                    row,
+                    column,
+                    item,
+                  );
+                  refresh();
+                }}
+              >
+                {item}
+              </MenuItem>
+            ))}
+          </Menu>
+        ) : null}
         <TableMenus
           model={model}
           state={tableMenu}

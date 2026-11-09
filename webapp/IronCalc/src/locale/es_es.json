@@ -194,6 +194,70 @@
       "unfreeze_rows": "Quitar fijación de filas"
     }
   },
+  "data_validation": {
+    "alert_message": "Mensaje de alerta",
+    "alert_title": "Título de la alerta",
+    "alert_type": "Tipo",
+    "allow": "Permitir",
+    "apply": "Aplicar",
+    "clear_all": "Borrar todo",
+    "continue": "¿Continuar?",
+    "data": "Datos",
+    "default_error": "Este valor no coincide con las restricciones definidas para esta celda.",
+    "default_error_title": "Valor no válido",
+    "done": "Listo",
+    "end_date": "Fecha de fin",
+    "end_time": "Hora de fin",
+    "error_alert": "Alerta de error",
+    "formula": "Fórmula",
+    "ignore_blank": "Omitir blancos",
+    "in_cell_dropdown": "Lista desplegable en la celda",
+    "input_message": "Mensaje de entrada",
+    "kinds": {
+      "custom": "Personalizada",
+      "date": "Fecha",
+      "decimal": "Decimal",
+      "list": "Lista",
+      "none": "Cualquier valor",
+      "text_length": "Longitud de texto",
+      "time": "Hora",
+      "whole": "Número entero"
+    },
+    "maximum": "Máximo",
+    "message": "Mensaje",
+    "message_title": "Título",
+    "minimum": "Mínimo",
+    "no": "No",
+    "ok": "Aceptar",
+    "operators": {
+      "between": "Entre",
+      "equal": "Igual a",
+      "greater_than": "Mayor que",
+      "greater_than_or_equal": "Mayor o igual que",
+      "less_than": "Menor que",
+      "less_than_or_equal": "Menor o igual que",
+      "not_between": "No está entre",
+      "not_equal": "Distinto de"
+    },
+    "pick_hint": "Seleccione celdas en la hoja y luego elija Listo.",
+    "pick_range": "Seleccionar un rango",
+    "retry": "Reintentar",
+    "settings": "Configuración",
+    "show_alert": "Mostrar alerta",
+    "show_message": "Mostrar mensaje",
+    "source": "Origen",
+    "source_hint": "Seleccione un rango o escriba elementos separados por comas (ejemplo: gato,perro,pájaro)",
+    "start_date": "Fecha de inicio",
+    "start_time": "Hora de inicio",
+    "styles": {
+      "information": "Información",
+      "stop": "Bloqueo",
+      "warning": "Advertencia"
+    },
+    "title": "Validación de datos",
+    "value": "Valor",
+    "yes": "Sí"
+  },
   "error_dialog": {
     "error_autofill": "No se puede autorrellenar",
     "error_autofill_array": "El área de relleno no puede cubrir parte de una fórmula matricial.",
@@ -515,6 +579,16 @@
     },
     "title": "Configuración regional"
   },
+  "remove_duplicates": {
+    "column": "Columna {{name}}",
+    "has_headers": "Mis datos tienen encabezados",
+    "hint": "Para eliminar valores duplicados, seleccione una o más columnas que los contengan.",
+    "none": "No se encontraron valores duplicados.",
+    "removed": "Se encontraron y quitaron {{removed}} valores duplicados; quedan {{remaining}} valores únicos.",
+    "select_all": "Seleccionar todas las columnas",
+    "select_data": "Seleccione una celda dentro de los datos e inténtelo de nuevo.",
+    "title": "Quitar duplicados"
+  },
   "right_drawer": {
     "close": "Cerrar",
     "resize_drawer": "Cambiar tamaño del panel"
@@ -693,6 +767,7 @@
     "conditional_formatting": "Formato condicional",
     "copy_styles": "Copiar estilos",
     "currency": "Formato moneda",
+    "data_validation": "Validación de datos",
     "decimal_places_decrease": "Disminuir decimales",
     "decimal_places_increase": "Aumentar decimales",
     "decrease_font_size": "Disminuir tamaño de fuente",
@@ -730,6 +805,7 @@
     "percentage": "Formato porcentaje",
     "pivot_table": "Tabla dinámica",
     "redo": "Rehacer",
+    "remove_duplicates": "Quitar duplicados",
     "scroll_left": "Desplazar a la izquierda",
     "scroll_right": "Desplazar a la derecha",
     "selected_png": "Exportar área seleccionada como PNG",

@@ -194,6 +194,70 @@
       "unfreeze_rows": "Fixierung der Zeilen aufheben"
     }
   },
+  "data_validation": {
+    "alert_message": "Warnmeldung",
+    "alert_title": "Titel der Warnung",
+    "alert_type": "Typ",
+    "allow": "Zulassen",
+    "apply": "Übernehmen",
+    "clear_all": "Alle löschen",
+    "continue": "Fortfahren?",
+    "data": "Daten",
+    "default_error": "Dieser Wert entspricht nicht den für diese Zelle definierten Einschränkungen.",
+    "default_error_title": "Ungültiger Wert",
+    "done": "Fertig",
+    "end_date": "Enddatum",
+    "end_time": "Endzeit",
+    "error_alert": "Fehlermeldung",
+    "formula": "Formel",
+    "ignore_blank": "Leere Zellen ignorieren",
+    "in_cell_dropdown": "Zellendropdown",
+    "input_message": "Eingabemeldung",
+    "kinds": {
+      "custom": "Benutzerdefiniert",
+      "date": "Datum",
+      "decimal": "Dezimalzahl",
+      "list": "Liste",
+      "none": "Jeder Wert",
+      "text_length": "Textlänge",
+      "time": "Uhrzeit",
+      "whole": "Ganze Zahl"
+    },
+    "maximum": "Maximum",
+    "message": "Meldung",
+    "message_title": "Titel",
+    "minimum": "Minimum",
+    "no": "Nein",
+    "ok": "OK",
+    "operators": {
+      "between": "Zwischen",
+      "equal": "Gleich",
+      "greater_than": "Größer als",
+      "greater_than_or_equal": "Größer oder gleich",
+      "less_than": "Kleiner als",
+      "less_than_or_equal": "Kleiner oder gleich",
+      "not_between": "Nicht zwischen",
+      "not_equal": "Ungleich"
+    },
+    "pick_hint": "Zellen auf dem Blatt auswählen und dann Fertig wählen.",
+    "pick_range": "Bereich auswählen",
+    "retry": "Wiederholen",
+    "settings": "Einstellungen",
+    "show_alert": "Warnung anzeigen",
+    "show_message": "Meldung anzeigen",
+    "source": "Quelle",
+    "source_hint": "Bereich auswählen oder Einträge durch Kommas getrennt eingeben (Beispiel: Katze,Hund,Vogel)",
+    "start_date": "Anfangsdatum",
+    "start_time": "Anfangszeit",
+    "styles": {
+      "information": "Information",
+      "stop": "Blockieren",
+      "warning": "Warnung"
+    },
+    "title": "Datenüberprüfung",
+    "value": "Wert",
+    "yes": "Ja"
+  },
   "error_dialog": {
     "error_autofill": "Automatisches Ausfüllen nicht möglich",
     "error_autofill_array": "Der Ausfüllbereich kann eine Matrixformel nicht teilweise abdecken.",
@@ -515,6 +579,16 @@
     },
     "title": "Regionaleinstellungen"
   },
+  "remove_duplicates": {
+    "column": "Spalte {{name}}",
+    "has_headers": "Daten haben Überschriften",
+    "hint": "Wählen Sie eine oder mehrere Spalten aus, die Duplikate enthalten, um doppelte Werte zu löschen.",
+    "none": "Keine doppelten Werte gefunden.",
+    "removed": "{{removed}} doppelte Werte gefunden und entfernt; {{remaining}} eindeutige Werte verbleiben.",
+    "select_all": "Alle Spalten auswählen",
+    "select_data": "Wählen Sie eine Zelle in Ihren Daten aus und versuchen Sie es erneut.",
+    "title": "Duplikate entfernen"
+  },
   "right_drawer": {
     "close": "Schließen",
     "resize_drawer": "Größe der Seitenleiste ändern"
@@ -693,6 +767,7 @@
     "conditional_formatting": "Bedingte Formatierung",
     "copy_styles": "Formatierung kopieren",
     "currency": "Als Währung formatieren",
+    "data_validation": "Datenüberprüfung",
     "decimal_places_decrease": "Dezimalstellen verringern",
     "decimal_places_increase": "Dezimalstellen erhöhen",
     "decrease_font_size": "Schriftgröße verringern",
@@ -730,6 +805,7 @@
     "percentage": "Als Prozent formatieren",
     "pivot_table": "PivotTable",
     "redo": "Wiederholen",
+    "remove_duplicates": "Duplikate entfernen",
     "scroll_left": "Nach links scrollen",
     "scroll_right": "Nach rechts scrollen",
     "selected_png": "Ausgewählten Bereich als PNG exportieren",

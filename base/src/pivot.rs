@@ -268,7 +268,7 @@ impl PivotArea {
             && column <= self.last_column
     }
 
-    fn intersects(&self, other: &PivotArea) -> bool {
+    pub(crate) fn intersects(&self, other: &PivotArea) -> bool {
         self.first_row <= other.last_row
             && other.first_row <= self.last_row
             && self.first_column <= other.last_column
@@ -796,6 +796,7 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
     if workbook.pivot_tables.is_empty()
         && workbook.table_filters.is_empty()
         && workbook.slicers.is_empty()
+        && workbook.data_validations.is_empty()
         && *view == SavedView::default()
     {
         return body;
@@ -813,6 +814,7 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
         table_filters: workbook.table_filters.clone(),
         slicers: workbook.slicers.clone(),
         view: view.clone(),
+        data_validations: workbook.data_validations.clone(),
     })
     .unwrap_or_default();
     let mut bytes =
@@ -834,6 +836,8 @@ struct SavedExtras {
     slicers: Vec<crate::table::Slicer>,
     #[serde(default)]
     view: SavedView,
+    #[serde(default)]
+    data_validations: Vec<crate::data_validation::DataValidation>,
 }
 
 fn restore_pivots(workbook: &mut Workbook, pivots: &[u8]) -> Result<(), String> {
@@ -875,6 +879,7 @@ pub fn workbook_from_bytes(bytes: &[u8]) -> Result<Workbook, String> {
         workbook.table_filters = extras.table_filters;
         workbook.slicers = extras.slicers;
         workbook.saved_view = extras.view;
+        workbook.data_validations = extras.data_validations;
         return Ok(workbook);
     }
     let Some(rest) = bytes.strip_prefix(PIVOT_MAGIC) else {

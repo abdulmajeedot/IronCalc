@@ -32,6 +32,7 @@ pub mod calc_result;
 pub mod cell;
 pub mod cf_types;
 pub mod colors;
+pub mod data_validation;
 pub mod expressions;
 pub mod formatter;
 pub mod language;

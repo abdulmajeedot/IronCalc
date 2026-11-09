@@ -651,6 +651,10 @@ impl<'a> UserModel<'a> {
                         .set_cell_link(*sheet, *row, *column, link.clone())?,
                     None => self.model.delete_cell_link(*sheet, *row, *column)?,
                 },
+                Diff::SetDataValidations {
+                    old_value,
+                    new_value: _,
+                } => self.model.workbook.data_validations = old_value.clone(),
                 Diff::SetCellComment {
                     sheet,
                     row,
@@ -1148,6 +1152,10 @@ impl<'a> UserModel<'a> {
                         .set_cell_link(*sheet, *row, *column, link.clone())?,
                     None => self.model.delete_cell_link(*sheet, *row, *column)?,
                 },
+                Diff::SetDataValidations {
+                    old_value: _,
+                    new_value,
+                } => self.model.workbook.data_validations = new_value.clone(),
                 Diff::SetCellComment {
                     sheet,
                     row,

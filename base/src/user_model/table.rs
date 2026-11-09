@@ -29,6 +29,7 @@ pub(crate) struct TableSnapshot {
     slicers: Vec<Slicer>,
     /// A sheet's comments, kept when rows or columns are deleted.
     comments: Option<(u32, Vec<Comment>)>,
+    validations: Vec<crate::data_validation::DataValidation>,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -80,6 +81,7 @@ impl UserModel<'_> {
             filters: self.model.workbook.table_filters.clone(),
             slicers: self.model.workbook.slicers.clone(),
             comments: None,
+            validations: self.model.workbook.data_validations.clone(),
         }
     }
 
@@ -109,7 +111,11 @@ impl UserModel<'_> {
     pub(super) fn table_snapshot_diff(&self, sheet: u32) -> Option<Diff> {
         let workbook = &self.model.workbook;
         let has_comments = !workbook.worksheets.get(sheet as usize)?.comments.is_empty();
-        if workbook.tables.is_empty() && workbook.slicers.is_empty() && !has_comments {
+        if workbook.tables.is_empty()
+            && workbook.slicers.is_empty()
+            && workbook.data_validations.is_empty()
+            && !has_comments
+        {
             return None;
         }
         let snapshot = self.table_snapshot_with_comments(sheet);
@@ -120,6 +126,7 @@ impl UserModel<'_> {
         self.model.workbook.tables = snapshot.tables.clone();
         self.model.workbook.table_filters = snapshot.filters.clone();
         self.model.workbook.slicers = snapshot.slicers.clone();
+        self.model.workbook.data_validations = snapshot.validations.clone();
         if let Some((sheet, comments)) = &snapshot.comments {
             if let Some(worksheet) = self.model.workbook.worksheets.get_mut(*sheet as usize) {
                 worksheet.comments = comments.clone();
@@ -1329,6 +1336,103 @@ impl UserModel<'_> {
             let name = name.to_string();
             self.table_edit(sheet, &[area], move |user| {
                 user.remove_table_rows(&name, &doomed)
+            })?;
+        }
+        Ok((removed, remaining))
+    }
+
+    /// Removes the rows of `area` that repeat an earlier row in `columns`.
+    /// Only the cells of `area` move. Returns how many rows went and how many
+    /// are left.
+    pub fn remove_duplicates(
+        &mut self,
+        sheet: u32,
+        area: PivotArea,
+        columns: &[i32],
+        has_headers: bool,
+    ) -> Result<(u32, u32), String> {
+        if columns.is_empty() {
+            return Err("Choose at least one column".to_string());
+        }
+        let worksheet = self.model.workbook.worksheet(sheet)?;
+        let sheet_name = worksheet.get_name();
+        let dimension = worksheet.dimension();
+        let area = PivotArea {
+            last_row: area.last_row.min(dimension.max_row),
+            last_column: area.last_column.min(dimension.max_column),
+            ..area
+        };
+        let width = area.last_column - area.first_column + 1;
+        let height = area.last_row - area.first_row + 1;
+        if worksheet
+            .merged_cells
+            .iter()
+            .any(|m| m.intersects(area.first_row, area.first_column, width, height))
+        {
+            return Err("Can't remove duplicates where there are merged cells.".to_string());
+        }
+        let in_table = self.model.workbook.tables.values().any(|table| {
+            table.sheet_name == sheet_name
+                && table_area(table).is_some_and(|place| place.intersects(&area))
+        });
+        if in_table {
+            return Err("Select the data inside the table, or only cells outside it.".to_string());
+        }
+        for row in area.first_row..=area.last_row {
+            for column in area.first_column..=area.last_column {
+                if self.get_pivot_table_at(sheet, row, column).is_some() {
+                    return Err("Can't remove duplicates in a PivotTable.".to_string());
+                }
+            }
+        }
+
+        let first = area.first_row + i32::from(has_headers);
+        let mut seen = HashSet::new();
+        let mut doomed = BTreeSet::new();
+        for row in first..=area.last_row {
+            let mut key = Vec::with_capacity(columns.len());
+            for column in columns {
+                key.push(
+                    self.model
+                        .get_formatted_cell_value(sheet, row, *column)?
+                        .to_lowercase(),
+                );
+            }
+            if !seen.insert(key) {
+                doomed.insert(row);
+            }
+        }
+        let removed = doomed.len() as u32;
+        let remaining = (area.last_row - first + 1).max(0) as u32 - removed;
+        if removed > 0 {
+            self.table_edit(sheet, &[area], move |user| {
+                let mut target = first;
+                let mut destinations = BTreeMap::new();
+                for row in first..=area.last_row {
+                    if doomed.contains(&row) {
+                        continue;
+                    }
+                    destinations.insert(row, target);
+                    if target != row {
+                        for column in area.first_column..=area.last_column {
+                            let cell = user.take_cell_at(sheet, row, column)?;
+                            user.put_cell_at(sheet, target, column, cell)?;
+                        }
+                    }
+                    target += 1;
+                }
+                for row in target..=area.last_row {
+                    for column in area.first_column..=area.last_column {
+                        user.take_cell_at(sheet, row, column)?;
+                    }
+                }
+                let rows = PivotArea {
+                    first_row: first,
+                    ..area
+                };
+                user.remap_comments(sheet, &rows, |row, column| {
+                    destinations.get(&row).map(|target| (*target, column))
+                })
             })?;
         }
         Ok((removed, remaining))

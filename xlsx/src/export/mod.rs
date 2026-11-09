@@ -3,6 +3,7 @@
 mod _rels;
 mod comments;
 mod conditional_formatting;
+mod data_validation;
 mod doc_props;
 mod dxfs_styles;
 mod escape;
@@ -220,6 +221,7 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
                 view.sheets
                     .iter()
                     .find(|v| v.sheet_id == worksheet.sheet_id),
+                &data_validation::get_data_validations_xml(workbook, worksheet),
                 &sheet_extras.parts_xml(rel_base),
                 &sheet_extras.ext_xml(rel_base),
             )

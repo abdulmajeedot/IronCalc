@@ -921,6 +921,102 @@ impl Model {
             .map_err(to_js_error)
     }
 
+    /// Returns the data validation rule on a cell, if it has one.
+    #[wasm_bindgen(
+        js_name = "getDataValidation",
+        unchecked_return_type = "ValidationSettings | undefined"
+    )]
+    pub fn get_data_validation(
+        &mut self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<JsValue, JsError> {
+        to_js(
+            &self
+                .model
+                .get_data_validation(sheet, row, column)
+                .map_err(to_js_error)?,
+        )
+    }
+
+    /// Replaces the data validation rules of an area.
+    #[wasm_bindgen(js_name = "setDataValidation")]
+    pub fn set_data_validation(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+        #[wasm_bindgen(unchecked_param_type = "ValidationSettings")] settings: JsValue,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_data_validation(sheet, from_js(area)?, from_js(settings)?)
+            .map_err(to_js_error)
+    }
+
+    /// The values a list rule offers on a cell.
+    #[wasm_bindgen(js_name = "getDataValidationItems")]
+    pub fn get_data_validation_items(
+        &mut self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<Vec<String>, JsError> {
+        self.model
+            .get_data_validation_items(sheet, row, column)
+            .map_err(to_js_error)
+    }
+
+    /// Checks the value now in a cell against the cell's rule.
+    #[wasm_bindgen(
+        js_name = "getDataValidationFailure",
+        unchecked_return_type = "ValidationFailure | undefined"
+    )]
+    pub fn get_data_validation_failure(
+        &mut self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<JsValue, JsError> {
+        to_js(
+            &self
+                .model
+                .get_data_validation_failure(sheet, row, column)
+                .map_err(to_js_error)?,
+        )
+    }
+
+    /// The block of data around a cell.
+    #[wasm_bindgen(js_name = "getCurrentRegion", unchecked_return_type = "PivotArea")]
+    pub fn get_current_region(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<JsValue, JsError> {
+        to_js(
+            &self
+                .model
+                .get_current_region(sheet, row, column)
+                .map_err(to_js_error)?,
+        )
+    }
+
+    /// Removes repeated rows from an area. Returns `[removed, remaining]`.
+    #[wasm_bindgen(js_name = "removeDuplicates")]
+    pub fn remove_duplicates(
+        &mut self,
+        sheet: u32,
+        #[wasm_bindgen(unchecked_param_type = "PivotArea")] area: JsValue,
+        columns: Vec<i32>,
+        has_headers: bool,
+    ) -> Result<Vec<u32>, JsError> {
+        let (removed, remaining) = self
+            .model
+            .remove_duplicates(sheet, from_js(area)?, &columns, has_headers)
+            .map_err(to_js_error)?;
+        Ok(vec![removed, remaining])
+    }
+
     /// Returns the notes of a sheet sorted by (row, column).
     #[wasm_bindgen(js_name = "getComments", unchecked_return_type = "CellComment[]")]
     pub fn get_comments(&self, sheet: u32) -> Result<JsValue, JsError> {

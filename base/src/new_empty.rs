@@ -367,6 +367,23 @@ impl<'a> Model<'a> {
         new_worksheet.shared_formulas = shared_formulas;
         self.parser.set_lexer_mode(LexerMode::A1);
 
+        // The copy has the source's rules on its own cells.
+        let source_id = self.workbook.worksheet(source_index)?.sheet_id;
+        self.workbook
+            .data_validations
+            .retain(|rule| rule.sheet_id != new_sheet_id);
+        let copies: Vec<_> = self
+            .workbook
+            .data_validations
+            .iter()
+            .filter(|rule| rule.sheet_id == source_id)
+            .map(|rule| crate::data_validation::DataValidation {
+                sheet_id: new_sheet_id,
+                ..rule.clone()
+            })
+            .collect();
+        self.workbook.data_validations.extend(copies);
+
         // Insert the copy right after the source sheet.
         let new_index = source_index as usize + 1;
         self.workbook.worksheets.insert(new_index, new_worksheet);
@@ -494,6 +511,7 @@ impl<'a> Model<'a> {
 
         // Set the mode back to A1
         self.parser.set_lexer_mode(LexerMode::A1);
+        self.rename_sheet_in_data_validations(sheet_index, new_name);
 
         // We reparse all the defined names formulas
         let mut defined_names = Vec::new();
@@ -666,6 +684,7 @@ impl<'a> Model<'a> {
             pivot_tables: vec![],
             table_filters: vec![],
             saved_view: Default::default(),
+            data_validations: vec![],
             slicers: vec![],
         };
         let parsed_formulas = Vec::new();

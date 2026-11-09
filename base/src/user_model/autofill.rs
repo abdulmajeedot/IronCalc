@@ -523,6 +523,12 @@ impl<'a> UserModel<'a> {
             }
         }
         self.apply_fill_merge_creation(sheet, &plan, &mut diff_list)?;
+        self.fill_data_validations(
+            sheet,
+            (row1, column1, last_row, last_column),
+            (fill_row_start, column1, fill_row_end, last_column),
+            &mut diff_list,
+        )?;
         self.push_diff_list(diff_list);
         self.evaluate();
         Ok(())
@@ -705,6 +711,12 @@ impl<'a> UserModel<'a> {
             }
         }
         self.apply_fill_merge_creation(sheet, &plan, &mut diff_list)?;
+        self.fill_data_validations(
+            sheet,
+            (row1, column1, last_row, last_column),
+            (row1, fill_col_start, last_row, fill_col_end),
+            &mut diff_list,
+        )?;
         self.push_diff_list(diff_list);
         self.evaluate();
         Ok(())

@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Columns3,
+  CopyMinus,
   DecimalsArrowLeft,
   DecimalsArrowRight,
   DollarSign,
@@ -30,6 +31,7 @@ import {
   Italic,
   Layers,
   Link2,
+  ListChecks,
   ListFilter,
   Minus,
   PaintBucket,
@@ -130,6 +132,8 @@ type ToolbarProperties = {
   onOpenTable: () => void;
   isTableOpen: boolean;
   onInsertSlicer: () => void;
+  onOpenDataValidation: () => void;
+  onRemoveDuplicates: () => void;
   canInsertSlicer: boolean;
   onOpenNamedStyles: () => void;
   isNamedStylesOpen: boolean;
@@ -534,6 +538,22 @@ function Toolbar(properties: ToolbarProperties) {
               aria-label={t("toolbar.slicer")}
               onClick={properties.onInsertSlicer}
               disabled={!canEdit || !properties.canInsertSlicer}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.data_validation")}>
+            <IconButton
+              icon={<ListChecks />}
+              aria-label={t("toolbar.data_validation")}
+              onClick={properties.onOpenDataValidation}
+              disabled={!canEdit}
+            />
+          </Tooltip>
+          <Tooltip title={t("toolbar.remove_duplicates")}>
+            <IconButton
+              icon={<CopyMinus />}
+              aria-label={t("toolbar.remove_duplicates")}
+              onClick={properties.onRemoveDuplicates}
+              disabled={!canEdit}
             />
           </Tooltip>
           <ThemeMenu

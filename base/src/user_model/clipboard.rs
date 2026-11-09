@@ -18,6 +18,7 @@ use crate::{
 };
 
 use crate::types::Comment;
+use crate::user_model::data_validation::CopiedValidation;
 use crate::user_model::history::Diff;
 
 const PARTIAL_MERGE_PASTE_ERROR: &str =
@@ -40,6 +41,9 @@ pub struct ClipboardCell {
     // the note on the cell, if any
     #[serde(default)]
     comment: Option<Comment>,
+    // the data validation rule on the cell, if any
+    #[serde(default)]
+    validation: Option<CopiedValidation>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -144,8 +148,12 @@ impl<'a> UserModel<'a> {
         let mut data = HashMap::new();
         let [row_start, column_start, row_end, column_end] = selected_area.range;
         let dimension = self.model.workbook.worksheet(sheet)?.dimension();
-        let row_end = row_end.min(dimension.max_row).max(row_start);
-        let column_end = column_end.min(dimension.max_column).max(column_start);
+        let (reach_row, reach_column) =
+            self.validation_reach(sheet, (row_start, column_start, row_end, column_end));
+        let row_end = row_end.min(dimension.max_row.max(reach_row)).max(row_start);
+        let column_end = column_end
+            .min(dimension.max_column.max(reach_column))
+            .max(column_start);
         for row in row_start..=row_end {
             let mut data_row = HashMap::new();
             let mut text_row = Vec::new();
@@ -159,6 +167,7 @@ impl<'a> UserModel<'a> {
                 );
                 let link = self.model.get_cell_link(sheet, row, column)?;
                 let comment = self.find_comment(sheet, row, column)?;
+                let validation = self.copied_validation(sheet, row, column);
                 data_row.insert(
                     column,
                     ClipboardCell {
@@ -167,6 +176,7 @@ impl<'a> UserModel<'a> {
                         style,
                         link,
                         comment,
+                        validation,
                     },
                 );
                 text_row.push(text);
@@ -396,6 +406,35 @@ impl<'a> UserModel<'a> {
                 });
             }
         }
+        let mut copied_validations = Vec::new();
+        for (source_row, data_row) in clipboard {
+            for (source_column, value) in data_row {
+                if let Some(validation) = &value.validation {
+                    copied_validations.push((
+                        selected_row + (source_row - source_first_row),
+                        selected_column + (source_column - source_first_column),
+                        validation.clone(),
+                    ));
+                }
+            }
+        }
+        let source_cells = (
+            source_first_row,
+            source_first_column,
+            source_last_row,
+            source_last_column,
+        );
+        diff_list.extend(self.place_copied_validations(
+            sheet,
+            (
+                selected_row,
+                selected_column,
+                selected_row + source_last_row - source_first_row,
+                selected_column + source_last_column - source_first_column,
+            ),
+            copied_validations,
+            is_cut.then_some((source_sheet, source_cells)),
+        )?);
         if is_cut {
             // A cut moves the merged cells of the source area to the target:
             // they are removed from the source and recreated, translated by

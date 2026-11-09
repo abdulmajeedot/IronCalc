@@ -22,7 +22,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../../Button/Button";
 import { IconButton } from "../../Button/IconButton";
@@ -207,6 +214,9 @@ interface DialogShellProps {
   onConfirm?: () => void;
   confirmDisabled?: boolean;
   children: React.ReactNode;
+  confirmLabel?: string;
+  // Shown in the footer before Cancel
+  footerStart?: ReactNode;
 }
 
 export const DialogShell = ({
@@ -214,6 +224,8 @@ export const DialogShell = ({
   onClose,
   onConfirm,
   confirmDisabled,
+  confirmLabel,
+  footerStart,
   children,
 }: DialogShellProps) => {
   const { t } = useTranslation();
@@ -269,6 +281,7 @@ export const DialogShell = ({
       </div>
       {onConfirm ? (
         <div className="ic-modal-dialog-footer">
+          {footerStart}
           <Button size="md" variant="secondary" onClick={close}>
             {t("common.cancel")}
           </Button>
@@ -278,7 +291,7 @@ export const DialogShell = ({
             disabled={confirmDisabled}
             onClick={confirm}
           >
-            {t("pivot_table.ok")}
+            {confirmLabel ?? t("pivot_table.ok")}
           </Button>
         </div>
       ) : null}

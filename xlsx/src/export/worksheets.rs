@@ -220,12 +220,14 @@ fn get_array_formula_attribute(
     escape_xml(formula).to_string()
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn get_worksheet_xml(
     worksheet: &Worksheet,
     parsed_formulas: &[(std::sync::Arc<Node>, StaticResult)],
     dimension: &str,
     is_sheet_selected: bool,
     view: Option<&SavedSheetView>,
+    data_validations: &str,
     extra_parts: &str,
     extra_ext: &str,
 ) -> String {
@@ -763,6 +765,7 @@ pub(crate) fn get_worksheet_xml(
   </sheetData>\
   {merge_cells_section}\
   {cf_sections}\
+  {data_validations}\
   {hyperlinks_section}\
   {extra_parts}\
   {ext_lst}\

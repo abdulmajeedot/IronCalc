@@ -6,6 +6,7 @@ import {
   useEffect,
   useRef,
 } from "react";
+import { enterCellInput } from "../DataTools/enterCellInput";
 import { isInReferenceMode } from "../Editor/util";
 import type { Cell } from "../types";
 import {
@@ -459,7 +460,9 @@ const usePointer = (options: PointerSettings): PointerEvents => {
           }
           // We are clicking away but we are not in reference mode
           // We finish the editing
-          model.setUserInput(
+          enterCellInput(
+            model,
+            workbookState,
             editingCell.sheet,
             editingCell.row,
             editingCell.column,

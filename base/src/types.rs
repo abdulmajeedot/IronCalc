@@ -132,6 +132,9 @@ pub struct Workbook {
     /// Where the user was when the workbook was saved. Saved next to the workbook.
     #[bitcode(skip)]
     pub saved_view: SavedView,
+    /// Saved next to the workbook, like the pivots.
+    #[bitcode(skip)]
+    pub data_validations: Vec<crate::data_validation::DataValidation>,
 }
 
 /// The sheet on screen when a workbook was saved, and what each sheet showed.

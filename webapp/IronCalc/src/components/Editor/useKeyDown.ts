@@ -1,5 +1,6 @@
 import type { Model } from "@ironcalc/wasm";
 import { type KeyboardEvent, type RefObject, useCallback } from "react";
+import { enterCellInput } from "../DataTools/enterCellInput";
 import {
   growRangeOverMergedCells,
   mergedCellContaining,
@@ -84,7 +85,9 @@ export const useKeyDown = (
             model.onArrowDown();
           } else {
             // end edit and select cell bellow (or above if shiftKey)
-            model.setUserInput(
+            enterCellInput(
+              model,
+              workbookState,
               cell.sheet,
               cell.row,
               cell.column,
@@ -102,7 +105,9 @@ export const useKeyDown = (
         }
         case "Tab": {
           // end edit and select cell to the right (or left if ShiftKey)
-          model.setUserInput(
+          enterCellInput(
+            model,
+            workbookState,
             cell.sheet,
             cell.row,
             cell.column,
@@ -257,7 +262,14 @@ export const useKeyDown = (
           // at this point we finish editing and select the cell to the right
           // (or left if ShiftKey is pressed)
           workbookState.clearEditingCell();
-          model.setUserInput(cell.sheet, cell.row, cell.column, cell.text);
+          enterCellInput(
+            model,
+            workbookState,
+            cell.sheet,
+            cell.row,
+            cell.column,
+            cell.text,
+          );
           model.setSelectedSheet(cell.sheet);
           if (shiftKey) {
             // TODO: ShiftKey
@@ -388,7 +400,14 @@ export const useKeyDown = (
           // at this point we finish editing and select the cell to the right
           // (or left if ShiftKey is pressed)
           workbookState.clearEditingCell();
-          model.setUserInput(cell.sheet, cell.row, cell.column, cell.text);
+          enterCellInput(
+            model,
+            workbookState,
+            cell.sheet,
+            cell.row,
+            cell.column,
+            cell.text,
+          );
           model.setSelectedSheet(cell.sheet);
           if (shiftKey) {
             // TODO: ShiftKey
@@ -517,7 +536,14 @@ export const useKeyDown = (
           // at this point we finish editing and select the cell to the right
           // (or left if ShiftKey is pressed)
           workbookState.clearEditingCell();
-          model.setUserInput(cell.sheet, cell.row, cell.column, cell.text);
+          enterCellInput(
+            model,
+            workbookState,
+            cell.sheet,
+            cell.row,
+            cell.column,
+            cell.text,
+          );
           model.setSelectedSheet(cell.sheet);
           if (shiftKey) {
             // TODO: ShiftKey
@@ -646,7 +672,14 @@ export const useKeyDown = (
           // at this point we finish editing and select the cell to the right
           // (or left if ShiftKey is pressed)
           workbookState.clearEditingCell();
-          model.setUserInput(cell.sheet, cell.row, cell.column, cell.text);
+          enterCellInput(
+            model,
+            workbookState,
+            cell.sheet,
+            cell.row,
+            cell.column,
+            cell.text,
+          );
           model.setSelectedSheet(cell.sheet);
           if (shiftKey) {
             // TODO: ShiftKey

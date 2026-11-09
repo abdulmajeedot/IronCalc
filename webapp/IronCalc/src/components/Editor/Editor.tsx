@@ -1,3 +1,4 @@
+import { enterCellInput } from "../DataTools/enterCellInput";
 // This is the cell editor for IronCalc
 // It is also the single most difficult part of the UX. It is based on an idea of the
 // celebrated Polish developer Mateusz Kopec.
@@ -210,7 +211,9 @@ const Editor = (options: EditorOptions) => {
     // onclick or onpointerdown events
     // If we are editing a cell finish that
     if (cell) {
-      model.setUserInput(
+      enterCellInput(
+        model,
+        workbookState,
         cell.sheet,
         cell.row,
         cell.column,

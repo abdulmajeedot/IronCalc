@@ -8,6 +8,7 @@ mod clipboard;
 mod comments;
 mod common;
 mod conditional_formatting;
+mod data_validation;
 pub(crate) mod history;
 mod links;
 mod merged_cells;

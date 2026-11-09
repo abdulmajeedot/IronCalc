@@ -16,6 +16,7 @@ interface Options {
   onEditKeyPressStart: (initText: string) => void;
   onCellEditStart: () => void;
   onEditNote: () => void;
+  onOpenValidationList: () => boolean;
   onBold: () => void;
   onItalic: () => void;
   onUnderline: () => void;
@@ -197,8 +198,10 @@ const useKeyboardNavigation = (
         // Alt+...
         switch (key) {
           case "ArrowDown": {
-            // select next sheet
-            options.onNextSheet();
+            // opens the cell's dropdown, or else selects the next sheet
+            if (!options.onOpenValidationList()) {
+              options.onNextSheet();
+            }
             event.stopPropagation();
             event.preventDefault();
             break;

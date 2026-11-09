@@ -876,6 +876,52 @@ export interface ClipboardCell {
   link?: Link | null;
   /** The note on the cell, when present */
   comment?: unknown;
+  /** The data validation rule on the cell, when present */
+  validation?: unknown;
+}
+
+export type ValidationKind =
+  | "none"
+  | "whole"
+  | "decimal"
+  | "list"
+  | "date"
+  | "time"
+  | "text_length"
+  | "custom";
+
+export type ValidationOperator =
+  | "between"
+  | "not_between"
+  | "equal"
+  | "not_equal"
+  | "greater_than"
+  | "less_than"
+  | "greater_than_or_equal"
+  | "less_than_or_equal";
+
+export type ValidationAlertStyle = "stop" | "warning" | "information";
+
+export interface ValidationSettings {
+  kind: ValidationKind;
+  operator: ValidationOperator;
+  formula1: string;
+  formula2: string;
+  ignore_blank: boolean;
+  in_cell_dropdown: boolean;
+  show_input: boolean;
+  input_title: string;
+  input_message: string;
+  show_error: boolean;
+  error_style: ValidationAlertStyle;
+  error_title: string;
+  error_message: string;
+}
+
+export interface ValidationFailure {
+  title: string;
+  message: string;
+  style: ValidationAlertStyle;
 }
 
 /** A note and the cell it is on. */

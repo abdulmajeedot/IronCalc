@@ -305,6 +305,10 @@ pub(crate) enum Diff {
         old_value: Box<Option<Link>>,
         new_value: Box<Option<Link>>,
     },
+    SetDataValidations {
+        old_value: Vec<crate::data_validation::DataValidation>,
+        new_value: Vec<crate::data_validation::DataValidation>,
+    },
     SetCellComment {
         sheet: u32,
         row: i32,

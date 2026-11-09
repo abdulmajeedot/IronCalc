@@ -194,6 +194,70 @@
       "unfreeze_rows": "Unfreeze rows"
     }
   },
+  "data_validation": {
+    "alert_message": "Alert Message",
+    "alert_title": "Alert Title",
+    "alert_type": "Type",
+    "allow": "Allow",
+    "apply": "Apply",
+    "clear_all": "Clear All",
+    "continue": "Continue?",
+    "data": "Data",
+    "default_error": "This value doesn't match the data validation restrictions defined for this cell.",
+    "default_error_title": "Invalid value",
+    "done": "Done",
+    "end_date": "End date",
+    "end_time": "End time",
+    "error_alert": "Error Alert",
+    "formula": "Formula",
+    "ignore_blank": "Ignore blank",
+    "in_cell_dropdown": "In-cell drop-down",
+    "input_message": "Input Message",
+    "kinds": {
+      "custom": "Custom",
+      "date": "Date",
+      "decimal": "Decimal",
+      "list": "List",
+      "none": "Any value",
+      "text_length": "Text length",
+      "time": "Time",
+      "whole": "Whole number"
+    },
+    "maximum": "Maximum",
+    "message": "Message",
+    "message_title": "Title",
+    "minimum": "Minimum",
+    "no": "No",
+    "ok": "OK",
+    "operators": {
+      "between": "Between",
+      "equal": "Equals",
+      "greater_than": "Greater than",
+      "greater_than_or_equal": "Greater than or equal",
+      "less_than": "Less than",
+      "less_than_or_equal": "Less than or equal",
+      "not_between": "Not between",
+      "not_equal": "Not equals"
+    },
+    "pick_hint": "Select cells on the sheet, then choose Done.",
+    "pick_range": "Select a range",
+    "retry": "Retry",
+    "settings": "Settings",
+    "show_alert": "Show Alert",
+    "show_message": "Show Message",
+    "source": "Source",
+    "source_hint": "Select from range or enter items separated by commas (example: cat,dog,bird)",
+    "start_date": "Start date",
+    "start_time": "Start time",
+    "styles": {
+      "information": "Information",
+      "stop": "Blocking",
+      "warning": "Warning"
+    },
+    "title": "Data Validation",
+    "value": "Value",
+    "yes": "Yes"
+  },
   "error_dialog": {
     "error_autofill": "Cannot auto-fill",
     "error_autofill_array": "The fill area cannot cover part of an array formula.",
@@ -515,6 +579,16 @@
     },
     "title": "Regional Settings"
   },
+  "remove_duplicates": {
+    "column": "Column {{name}}",
+    "has_headers": "My data has headers",
+    "hint": "To delete duplicate values, select one or more columns that contain duplicates.",
+    "none": "No duplicate values found.",
+    "removed": "{{removed}} duplicate values found and removed; {{remaining}} unique values remain.",
+    "select_all": "Select all columns",
+    "select_data": "Select a cell inside your data, then try again.",
+    "title": "Remove Duplicates"
+  },
   "right_drawer": {
     "close": "Close",
     "resize_drawer": "Resize drawer"
@@ -693,6 +767,7 @@
     "conditional_formatting": "Conditional formatting",
     "copy_styles": "Copy styles",
     "currency": "Format as currency",
+    "data_validation": "Data validation",
     "decimal_places_decrease": "Decrease decimal places",
     "decimal_places_increase": "Increase decimal places",
     "decrease_font_size": "Decrease font size",
@@ -730,6 +805,7 @@
     "percentage": "Format as percentage",
     "pivot_table": "PivotTable",
     "redo": "Redo",
+    "remove_duplicates": "Remove duplicates",
     "scroll_left": "Scroll left",
     "scroll_right": "Scroll right",
     "selected_png": "Export selected area as PNG",

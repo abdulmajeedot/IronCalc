@@ -143,7 +143,7 @@ fn displace_interval_for_move(
 }
 
 /// Returns the new row after displacement, or `None` if the row was deleted.
-fn displace_cf_row(row: i32, data: &DisplaceData, sheet: u32) -> Option<i32> {
+pub(crate) fn displace_cf_row(row: i32, data: &DisplaceData, sheet: u32) -> Option<i32> {
     match data {
         DisplaceData::Row {
             sheet: s,
@@ -180,7 +180,7 @@ fn displace_cf_row(row: i32, data: &DisplaceData, sheet: u32) -> Option<i32> {
 }
 
 /// Returns the new column after displacement, or `None` if the column was deleted.
-fn displace_cf_col(col: i32, data: &DisplaceData, sheet: u32) -> Option<i32> {
+pub(crate) fn displace_cf_col(col: i32, data: &DisplaceData, sheet: u32) -> Option<i32> {
     match data {
         DisplaceData::Column {
             sheet: s,
@@ -276,7 +276,7 @@ fn displace_cf_sqref(sqref: &str, data: &DisplaceData, sheet: u32) -> String {
 /// Displaces a single formula string (with or without leading `=`) using `to_string_displaced`.
 /// CF formulas are stored in English (see [Model::user_formula_to_internal]),
 /// so the caller must have the parser in the default (English) locale/language.
-fn displace_cf_formula_str(
+pub(crate) fn displace_cf_formula_str(
     parser: &mut ExprParser<'_>,
     formula: &str,
     context: &CellReferenceRC,
@@ -558,6 +558,7 @@ impl<'a> Model<'a> {
 
     fn displace_cf_ranges(&mut self, sheet: u32, displace_data: &DisplaceData) {
         self.displace_comments(sheet, displace_data);
+        self.displace_data_validations(sheet, displace_data);
         match *displace_data {
             DisplaceData::Row { row, delta, .. } => {
                 self.displace_pivots(sheet, true, row, delta);

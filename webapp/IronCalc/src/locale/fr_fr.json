@@ -194,6 +194,70 @@
       "unfreeze_rows": "Annuler le figeage des lignes"
     }
   },
+  "data_validation": {
+    "alert_message": "Message d'alerte",
+    "alert_title": "Titre de l'alerte",
+    "alert_type": "Type",
+    "allow": "Autoriser",
+    "apply": "Appliquer",
+    "clear_all": "Tout effacer",
+    "continue": "Continuer ?",
+    "data": "Données",
+    "default_error": "Cette valeur ne respecte pas les restrictions définies pour cette cellule.",
+    "default_error_title": "Valeur non valide",
+    "done": "Terminé",
+    "end_date": "Date de fin",
+    "end_time": "Heure de fin",
+    "error_alert": "Alerte d'erreur",
+    "formula": "Formule",
+    "ignore_blank": "Ignorer les vides",
+    "in_cell_dropdown": "Liste déroulante dans la cellule",
+    "input_message": "Message de saisie",
+    "kinds": {
+      "custom": "Personnalisé",
+      "date": "Date",
+      "decimal": "Décimal",
+      "list": "Liste",
+      "none": "Toute valeur",
+      "text_length": "Longueur du texte",
+      "time": "Heure",
+      "whole": "Nombre entier"
+    },
+    "maximum": "Maximum",
+    "message": "Message",
+    "message_title": "Titre",
+    "minimum": "Minimum",
+    "no": "Non",
+    "ok": "OK",
+    "operators": {
+      "between": "Compris entre",
+      "equal": "Égal à",
+      "greater_than": "Supérieur à",
+      "greater_than_or_equal": "Supérieur ou égal à",
+      "less_than": "Inférieur à",
+      "less_than_or_equal": "Inférieur ou égal à",
+      "not_between": "Non compris entre",
+      "not_equal": "Différent de"
+    },
+    "pick_hint": "Sélectionnez des cellules sur la feuille, puis choisissez Terminé.",
+    "pick_range": "Sélectionner une plage",
+    "retry": "Réessayer",
+    "settings": "Paramètres",
+    "show_alert": "Afficher l'alerte",
+    "show_message": "Afficher le message",
+    "source": "Source",
+    "source_hint": "Sélectionnez une plage ou saisissez des éléments séparés par des virgules (exemple : chat,chien,oiseau)",
+    "start_date": "Date de début",
+    "start_time": "Heure de début",
+    "styles": {
+      "information": "Information",
+      "stop": "Blocage",
+      "warning": "Avertissement"
+    },
+    "title": "Validation des données",
+    "value": "Valeur",
+    "yes": "Oui"
+  },
   "error_dialog": {
     "error_autofill": "Recopie impossible",
     "error_autofill_array": "La zone de recopie ne peut pas couvrir une partie d'une formule matricielle.",
@@ -515,6 +579,16 @@
     },
     "title": "Paramètres régionaux"
   },
+  "remove_duplicates": {
+    "column": "Colonne {{name}}",
+    "has_headers": "Mes données ont des en-têtes",
+    "hint": "Pour supprimer les doublons, sélectionnez une ou plusieurs colonnes qui en contiennent.",
+    "none": "Aucun doublon trouvé.",
+    "removed": "{{removed}} doublons trouvés et supprimés ; {{remaining}} valeurs uniques restantes.",
+    "select_all": "Sélectionner toutes les colonnes",
+    "select_data": "Sélectionnez une cellule dans vos données, puis réessayez.",
+    "title": "Supprimer les doublons"
+  },
   "right_drawer": {
     "close": "Fermer",
     "resize_drawer": "Redimensionner le panneau"
@@ -693,6 +767,7 @@
     "conditional_formatting": "Mise en forme conditionnelle",
     "copy_styles": "Copier les styles",
     "currency": "Formater monnaie",
+    "data_validation": "Validation des données",
     "decimal_places_decrease": "Diminuer les décimales",
     "decimal_places_increase": "Augmenter les décimales",
     "decrease_font_size": "Diminuer la taille de la police",
@@ -730,6 +805,7 @@
     "percentage": "Formater pourcentage",
     "pivot_table": "Tableau croisé",
     "redo": "Rétablir",
+    "remove_duplicates": "Supprimer les doublons",
     "scroll_left": "Faire défiler vers la gauche",
     "scroll_right": "Faire défiler vers la droite",
     "selected_png": "Exporter la zone sélectionnée en PNG",

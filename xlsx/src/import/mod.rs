@@ -1,4 +1,5 @@
 mod conditional_formatting;
+mod data_validation;
 mod metadata;
 mod pivot;
 pub(crate) mod shared_strings;
@@ -109,6 +110,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     // append to `styles.dxfs`, referencing them back by index from the rule.
     let mut styles = load_styles(&mut archive, &theme)?;
     let mut sheet_views = Vec::new();
+    let mut data_validations = Vec::new();
     let worksheets = load_sheets(
         &mut archive,
         &rels,
@@ -118,6 +120,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         &theme,
         &mut styles.dxfs,
         &mut sheet_views,
+        &mut data_validations,
     )?;
     // `activeTab` counts chart sheets too, which are not loaded.
     let active_sheet_id = workbook
@@ -178,6 +181,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         table_filters,
         slicers,
         saved_view,
+        data_validations,
     };
     pivot::paint_imported_pivots(&mut workbook);
     Ok(workbook)

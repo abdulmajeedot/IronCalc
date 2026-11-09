@@ -1,3 +1,4 @@
+import type { ValidationFailure } from "@ironcalc/wasm";
 // This are properties of the workbook that are not permanently stored
 // They only happen at 'runtime' while the workbook is being used:
 //
@@ -85,12 +86,30 @@ export interface EditingCell {
 // Those are styles that are copied
 type AreaStyles = CellStyle[][];
 
+// A typed value that broke its cell's rule, waiting for the user's answer.
+export interface ValidationAlert {
+  sheet: number;
+  row: number;
+  column: number;
+  text: string;
+  failure: ValidationFailure;
+}
+
 export class WorkbookState {
   private extendToArea: Area | null;
   private copyStyles: AreaStyles | null;
   private cell: EditingCell | null;
   private cutRange: CutRange | null;
   private selecting: boolean;
+  private validationAlert: ValidationAlert | null = null;
+
+  getValidationAlert(): ValidationAlert | null {
+    return this.validationAlert;
+  }
+
+  setValidationAlert(alert: ValidationAlert | null): void {
+    this.validationAlert = alert;
+  }
 
   constructor() {
     // the extendTo area is the area we are covering

@@ -21,6 +21,11 @@ import {
   CLIPBOARD_ID_SESSION_STORAGE_KEY,
   getNewClipboardId,
 } from "../clipboard";
+import {
+  DataValidationDialog,
+  ValidationAlertDialog,
+} from "../DataTools/DataValidationDialog";
+import { RemoveDuplicatesDialog } from "../DataTools/RemoveDuplicatesDialog";
 import FormulaBar from "../FormulaBar/FormulaBar";
 import type { SaveError } from "../RightDrawer/NamedStyles/EditNamedStyle";
 import RightDrawer, {
@@ -80,6 +85,7 @@ const Workbook = (
   const worksheetRef = useRef<{
     getCanvas: () => WorksheetCanvas | null;
     editNote: () => void;
+    openValidationList: () => boolean;
   }>(null);
   const lastClipboardJson = useRef<string | null>(null);
 
@@ -111,6 +117,8 @@ const Workbook = (
   // and closes on leaving one, unless the user opened it with the toolbar.
   const pivotPanelFollowsSelection = useRef(false);
   const [tableDialog, setTableDialog] = useState<TableDialogState | null>(null);
+  const [dataValidationOpen, setDataValidationOpen] = useState(false);
+  const [removeDuplicatesOpen, setRemoveDuplicatesOpen] = useState(false);
   const [slicerName, setSlicerName] = useState<string | null>(null);
   // Set when the user hides the field list from a pivot's right-click menu
   const pivotFieldListHidden = useRef(false);
@@ -158,7 +166,7 @@ const Workbook = (
     // Prevents the workbook from stealing focus when the user is interacting with the color picker, border picker, advanced color picker, or a modal dialog
     if (
       active?.closest(
-        ".ic-color-picker, .ic-advanced-color-picker-panel, .ic-border-picker, .ic-modal-dialog, .ic-worksheet-note-editor",
+        ".ic-color-picker, .ic-advanced-color-picker-panel, .ic-border-picker, .ic-modal-dialog, .ic-worksheet-note-editor, .ic-dv-picker",
       )
     ) {
       return;
@@ -621,9 +629,46 @@ const Workbook = (
 
   // FIXME: I *think* we should have only one on onKeyPressed function that goes to
   // the Rust backend
+  const validationAlert = workbookState.getValidationAlert();
+  const finishValidationAlert = (answer: "keep" | "retry" | "undo"): void => {
+    const alert = workbookState.getValidationAlert();
+    workbookState.setValidationAlert(null);
+    if (alert && answer !== "keep") {
+      const { sheet, row, column, text } = alert;
+      model.undo();
+      model.setSelectedSheet(sheet);
+      model.setSelectedCell(row, column);
+      if (answer === "retry") {
+        const { width: editorWidth, height: editorHeight } = getEditorSize(
+          model,
+          sheet,
+          row,
+          column,
+        );
+        workbookState.setEditingCell({
+          sheet,
+          row,
+          column,
+          text,
+          cursorStart: text.length,
+          cursorEnd: text.length,
+          referencedRange: null,
+          focus: "cell",
+          activeRanges: [],
+          mode: "edit",
+          editorWidth,
+          editorHeight,
+        });
+      }
+    }
+    setRedrawId((id) => id + 1);
+  };
+
   const { onKeyDown } = useKeyboardNavigation({
     canEdit,
     onEditNote: (): void => worksheetRef.current?.editNote(),
+    onOpenValidationList: (): boolean =>
+      worksheetRef.current?.openValidationList() ?? false,
     onCellsDeleted: (): void => {
       const {
         sheet,
@@ -1161,6 +1206,17 @@ const Workbook = (
             }
           }}
           isTableOpen={isDrawerOpen && drawerType === "tableDesign"}
+          onOpenDataValidation={() => setDataValidationOpen(true)}
+          onRemoveDuplicates={() => {
+            if (tableAtSelection) {
+              setTableDialog({
+                kind: "duplicates",
+                table: tableAtSelection.name,
+              });
+            } else {
+              setRemoveDuplicatesOpen(true);
+            }
+          }}
           canInsertSlicer={
             tableAtSelection !== null || pivotAtSelection !== null
           }
@@ -1317,6 +1373,30 @@ const Workbook = (
           model={model}
         />
       </div>
+      {dataValidationOpen ? (
+        <DataValidationDialog
+          model={model}
+          onClose={() => setDataValidationOpen(false)}
+          refresh={() => setRedrawId((id) => id + 1)}
+        />
+      ) : null}
+      {removeDuplicatesOpen ? (
+        <RemoveDuplicatesDialog
+          model={model}
+          onClose={() => setRemoveDuplicatesOpen(false)}
+          refresh={() => setRedrawId((id) => id + 1)}
+        />
+      ) : null}
+      {validationAlert ? (
+        <ValidationAlertDialog
+          style={validationAlert.failure.style}
+          title={validationAlert.failure.title}
+          message={validationAlert.failure.message}
+          onKeep={() => finishValidationAlert("keep")}
+          onRetry={() => finishValidationAlert("retry")}
+          onCancel={() => finishValidationAlert("undo")}
+        />
+      ) : null}
       <TableDialogs
         model={model}
         state={tableDialog}
