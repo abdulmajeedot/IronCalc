@@ -33,7 +33,10 @@ import { renderTableMarkers } from "../RightDrawer/Table/tableMarkers";
 import type { Cell } from "../types";
 import { getEditorSize } from "../util";
 import type { WorkbookActions } from "../Workbook/workbookActions";
-import type { LinkHoverCell } from "../WorksheetCanvas/cellLinks";
+import type {
+  CommentHoverCell,
+  LinkHoverCell,
+} from "../WorksheetCanvas/cellLinks";
 import {
   headerColumnWidth,
   headerRowHeight,
@@ -42,6 +45,7 @@ import {
 } from "../WorksheetCanvas/constants";
 import WorksheetCanvas from "../WorksheetCanvas/worksheetCanvas";
 import type { WorkbookState } from "../workbookState";
+import { CellNoteEditor, CellNotePopup, placeCellNote } from "./CellNote";
 import CellContextMenu from "./ContextMenus/Cell";
 import ColumnHeaderContextMenu from "./ContextMenus/ColumnHeader";
 import RowHeaderContextMenu from "./ContextMenus/RowHeader";
@@ -300,6 +304,66 @@ const Worksheet = forwardRef(
     };
 
     const { model, workbookState, refresh, canEdit, actions } = props;
+
+    // The note shown because the pointer is over its cell, and the note being
+    // written. Both are placed beside their cell after every paint.
+    const [noteHover, setNoteHover] = useState<CommentHoverCell | null>(null);
+    const [noteEditor, setNoteEditor] = useState<{
+      sheet: number;
+      row: number;
+      column: number;
+      text: string;
+    } | null>(null);
+    const noteHoverElement = useRef<HTMLDivElement>(null);
+    const noteEditorElement = useRef<HTMLDivElement>(null);
+    const showNoteHover = (cell: CommentHoverCell | null): void => {
+      const next = noteEditor ? null : cell;
+      setNoteHover((shown) =>
+        shown?.row === next?.row &&
+        shown?.column === next?.column &&
+        shown?.text === next?.text
+          ? shown
+          : next,
+      );
+    };
+    const editNote = (): void => {
+      const { sheet, row, column } = model.getSelectedView();
+      const note = model.getComment(sheet, row, column);
+      setNoteHover(null);
+      setNoteEditor({
+        sheet,
+        row: note?.row ?? row,
+        column: note?.column ?? column,
+        text: note?.text ?? "",
+      });
+    };
+    const deleteNote = (): void => {
+      const { sheet, row, column } = model.getSelectedView();
+      model.deleteComment(sheet, row, column);
+      refresh();
+    };
+    const saveNote = (text: string): void => {
+      if (noteEditor) {
+        const { sheet, row, column } = noteEditor;
+        // A note with nothing in it is no note
+        if (text.trim() === "") {
+          model.deleteComment(sheet, row, column);
+        } else {
+          model.setComment(sheet, row, column, text);
+        }
+      }
+      setNoteEditor(null);
+      refresh();
+    };
+    const selectedNote =
+      cellContextMenuOpen || tableMenu?.type === "cell"
+        ? model.getComment(
+            model.getSelectedView().sheet,
+            model.getSelectedView().row,
+            model.getSelectedView().column,
+          )
+        : undefined;
+
     const canEditRef = useRef(canEdit);
     canEditRef.current = canEdit;
     tableMarkerAction.current = (marker, anchor) => {
@@ -343,6 +407,7 @@ const Worksheet = forwardRef(
 
     useImperativeHandle(ref, () => ({
       getCanvas: () => worksheetCanvas.current,
+      editNote,
     }));
 
     useEffect(() => {
@@ -427,6 +492,7 @@ const Worksheet = forwardRef(
           }
         },
         onHideLinkTooltip: hideLinkTooltip,
+        onCommentHover: showNoteHover,
         onAutofillError: (message) => {
           // the known rejections get a dialog; anything else stays silent
           if (
@@ -566,6 +632,22 @@ const Worksheet = forwardRef(
           );
         }
         slicerLayer.current?.update();
+        if (noteHover) {
+          placeCellNote(
+            noteHoverElement.current,
+            canvas,
+            noteHover.row,
+            noteHover.column,
+          );
+        }
+        if (noteEditor && noteEditor.sheet === model.getSelectedSheet()) {
+          placeCellNote(
+            noteEditorElement.current,
+            canvas,
+            noteEditor.row,
+            noteEditor.column,
+          );
+        }
       };
       canvas.renderSheet();
       worksheetCanvas.current = canvas;
@@ -937,6 +1019,25 @@ const Worksheet = forwardRef(
               onPointerLeave={scheduleHideLinkTooltip}
             />
           ) : null}
+          {noteHover ? (
+            <CellNotePopup
+              elementRef={noteHoverElement}
+              text={noteHover.text}
+              author={noteHover.author}
+            />
+          ) : null}
+          {noteEditor ? (
+            <CellNoteEditor
+              key={`${noteEditor.sheet}-${noteEditor.row}-${noteEditor.column}`}
+              elementRef={noteEditorElement}
+              initialText={noteEditor.text}
+              onSave={saveNote}
+              onCancel={() => {
+                setNoteEditor(null);
+                refresh();
+              }}
+            />
+          ) : null}
         </div>
         <TableMenus
           model={model}
@@ -948,6 +1049,9 @@ const Worksheet = forwardRef(
           onPaste={actions.paste}
           onDialog={props.onTableDialog}
           onShowDesign={props.onShowTableDesign}
+          hasNote={Boolean(selectedNote)}
+          onEditNote={editNote}
+          onDeleteNote={deleteNote}
         />
         <PivotMenus
           model={model}
@@ -972,6 +1076,15 @@ const Worksheet = forwardRef(
           onCut={actions.cut}
           onCopy={actions.copy}
           onPaste={actions.paste}
+          hasNote={Boolean(selectedNote)}
+          onEditNote={(): void => {
+            setCellContextMenuOpen(false);
+            editNote();
+          }}
+          onDeleteNote={(): void => {
+            setCellContextMenuOpen(false);
+            deleteNote();
+          }}
           onInsertColumnLeft={(): void => {
             setCellContextMenuOpen(false);
             actions.insertColumnsLeft();

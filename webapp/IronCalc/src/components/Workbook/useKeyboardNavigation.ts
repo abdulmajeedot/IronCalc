@@ -15,6 +15,7 @@ interface Options {
   ) => void;
   onEditKeyPressStart: (initText: string) => void;
   onCellEditStart: () => void;
+  onEditNote: () => void;
   onBold: () => void;
   onItalic: () => void;
   onUnderline: () => void;
@@ -55,6 +56,7 @@ interface Options {
 // * Ctrl+u/i/b: style
 // * Ctrl+z/y: undo/redo
 // * F2: start editing
+// * Shift+F2: add or edit the note of the selected cell
 // * Ctrl+Space: select column
 // * Shift+Space: select row
 //
@@ -224,6 +226,11 @@ const useKeyboardNavigation = (
         return;
       }
       if (isShift) {
+        if (key === "F2" && options.canEdit) {
+          options.onEditNote();
+          event.stopPropagation();
+          event.preventDefault();
+        }
         // Other combinations with Shift are not handled
         return;
       }

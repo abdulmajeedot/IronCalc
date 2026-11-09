@@ -181,6 +181,11 @@ function App() {
 
   useEffect(() => {
     if (!model) return;
+    // Moving around doesn't change the workbook but should still be saved, so
+    // it reopens at the same place. Waiting for the view to settle avoids
+    // writing the whole workbook on every step of a keyboard run.
+    let savedView = JSON.stringify(model.getSelectedView());
+    let lastView = savedView;
     // We try to save the model every second
     const interval = setInterval(() => {
       if (isSavingRef.current) {
@@ -188,7 +193,11 @@ function App() {
         return;
       }
       const queue = model.flushSendQueue();
-      if (queue.length !== 1) {
+      const view = JSON.stringify(model.getSelectedView());
+      const viewSettled = view === lastView && view !== savedView;
+      lastView = view;
+      if (queue.length !== 1 || viewSettled) {
+        savedView = view;
         isSavingRef.current = true;
         saveSelectedModelInStorage(model)
           .catch(reportSaveError)

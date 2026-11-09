@@ -19,7 +19,7 @@ use ironcalc_base::{
     },
     types::{
         ArrayKind, Cell, Col, Color, Comment, DefinedName, Dxf, FormulaValue, Link, MergedCell,
-        SheetState, SpillValue, Table, Theme, Worksheet,
+        SavedSheetView, SheetState, SpillValue, Table, Theme, Worksheet,
     },
 };
 use thiserror::Error;
@@ -44,6 +44,8 @@ pub(crate) struct Sheet {
 pub(crate) struct WorkbookXML {
     pub(crate) worksheets: Vec<Sheet>,
     pub(crate) defined_names: Vec<DefinedName>,
+    /// Index into `worksheets` of the sheet on screen when the file was saved
+    pub(crate) active_tab: usize,
 }
 
 pub(crate) struct Relationship {
@@ -343,6 +345,13 @@ fn load_comments<R: Read + std::io::Seek>(
     let file = archive.by_name(path)?;
     let doc = XmlNode::parse(BufReader::new(file))?;
     let ws = &doc;
+    let authors: Vec<String> = ws
+        .children()
+        .filter(|n| n.has_tag_name("authors"))
+        .flat_map(|n| n.children())
+        .filter(|n| n.has_tag_name("author"))
+        .map(|n| n.text().unwrap_or("").to_string())
+        .collect();
     let comment_list = ws
         .children()
         .filter(|n| n.has_tag_name("commentList"))
@@ -352,12 +361,21 @@ fn load_comments<R: Read + std::io::Seek>(
             let text = comment
                 .descendants()
                 .filter(|n| n.has_tag_name("t"))
-                .map(|n| n.text().unwrap().to_string())
+                .map(|n| n.text().unwrap_or("").to_string())
                 .collect::<Vec<String>>()
                 .join("");
             let cell_ref = get_attribute(comment, "ref")?.to_string();
-            // TODO: Read author_name from the list of authors
-            let author_name = "".to_string();
+            let author = comment
+                .attribute("authorId")
+                .and_then(|id| id.parse::<usize>().ok())
+                .and_then(|id| authors.get(id))
+                .map(String::as_str)
+                .unwrap_or("");
+            // A threaded comment's author here is only its id ("tc={...}").
+            let (text, author_name) = match threaded_comment_text(&text) {
+                Some(text) => (text, String::new()),
+                None => (text, author.to_string()),
+            };
             comments.push(Comment {
                 text,
                 author_name,
@@ -368,6 +386,21 @@ fn load_comments<R: Read + std::io::Seek>(
     }
 
     Ok(comments)
+}
+
+/// Excel also stores a threaded comment as a note, with a notice in front of
+/// the conversation. Returns just the conversation.
+fn threaded_comment_text(text: &str) -> Option<String> {
+    if !text.starts_with("[Threaded comment]") {
+        return None;
+    }
+    let (_, conversation) = text.split_once("Comment:")?;
+    let lines: Vec<&str> = conversation
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    Some(lines.join("\n"))
 }
 
 #[derive(Error, Debug, PartialEq)]
@@ -704,8 +737,13 @@ fn load_sheet_rels<R: Read + std::io::Seek>(
         let t = get_attribute(rel, "Type")?.to_string();
         if t.ends_with("comments") {
             let mut target = get_attribute(rel, "Target")?.to_string();
-            // Target="../comments1.xlsx"
-            target.replace_range(..2, v[0]);
+            let target = if let Some(p) = target.strip_prefix('/') {
+                p.to_string()
+            } else {
+                // Target="../comments1.xlsx"
+                target.replace_range(..2, v[0]);
+                target
+            };
             comments = load_comments(archive, &target)?;
         } else if t.ends_with("hyperlink") {
             let id = get_attribute(rel, "Id")?.to_string();
@@ -808,6 +846,7 @@ struct SheetView {
     frozen_columns: i32,
     frozen_rows: i32,
     show_grid_lines: bool,
+    selection: SavedSheetView,
 }
 
 impl Default for SheetView {
@@ -816,8 +855,58 @@ impl Default for SheetView {
             frozen_rows: 0,
             frozen_columns: 0,
             show_grid_lines: true,
+            selection: SavedSheetView::default(),
         }
     }
+}
+
+fn parse_cell(cell: Option<&str>) -> Option<(i32, i32)> {
+    let cell = parse_reference_a1(cell?)?;
+    Some((cell.row, cell.column))
+}
+
+/// The active cell, the selected range and the first visible cell of a sheet.
+fn get_selection(sheet_view: &XmlNode, pane: Option<&XmlNode>) -> SavedSheetView {
+    let active_pane = pane
+        .and_then(|p| p.attribute("activePane"))
+        .unwrap_or("topLeft");
+    let selection = sheet_view
+        .children()
+        .filter(|n| n.has_tag_name("selection"))
+        .find(|n| n.attribute("pane").unwrap_or("topLeft") == active_pane);
+
+    let mut view = SavedSheetView::default();
+    if let Some(selection) = selection {
+        let (row, column) = parse_cell(selection.attribute("activeCell")).unwrap_or((1, 1));
+        view.row = row;
+        view.column = column;
+        view.range = [row, column, row, column];
+        // IronCalc has one range: the one holding the active cell.
+        for range in selection
+            .attribute("sqref")
+            .unwrap_or("")
+            .split_whitespace()
+        {
+            let (first, last) = range.split_once(':').unwrap_or((range, range));
+            let (Some((r1, c1)), Some((r2, c2))) =
+                (parse_cell(Some(first)), parse_cell(Some(last)))
+            else {
+                continue;
+            };
+            if (r1..=r2).contains(&row) && (c1..=c2).contains(&column) {
+                view.range = [r1, c1, r2, c2];
+                break;
+            }
+        }
+    }
+    // With frozen rows only, the column may be on the sheet view alone (and
+    // likewise the row with frozen columns), so use whichever is further.
+    let (top, left) = parse_cell(sheet_view.attribute("topLeftCell")).unwrap_or((1, 1));
+    let (pane_top, pane_left) =
+        parse_cell(pane.and_then(|p| p.attribute("topLeftCell"))).unwrap_or((1, 1));
+    view.top_row = top.max(pane_top);
+    view.left_column = left.max(pane_left);
+    view
 }
 
 fn get_sheet_view(ws: &XmlNode) -> SheetView {
@@ -841,8 +930,7 @@ fn get_sheet_view(ws: &XmlNode) -> SheetView {
     // bottomLeft, bottomRight, topLeft, topRight
 
     // NB: bottomLeft is used when only rows are frozen, etc
-    // IronCalc ignores all those, as well as the selection and the selected
-    // tab: a workbook always opens on its first sheet at A1.
+    // The selection that counts is the one of the active pane.
 
     let mut frozen_rows = 0;
     let mut frozen_columns = 0;
@@ -891,6 +979,7 @@ fn get_sheet_view(ws: &XmlNode) -> SheetView {
         frozen_rows,
         frozen_columns,
         show_grid_lines,
+        selection: get_selection(sheet_view, pane.first().copied()),
     }
 }
 
@@ -914,6 +1003,7 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     defined_names: Vec<DefinedNameS>,
     theme: &Theme,
     dxfs: &mut Vec<Dxf>,
+    views: &mut Vec<SavedSheetView>,
 ) -> Result<Worksheet, XlsxError> {
     let sheet_name = &settings.name;
     let sheet_id = settings.id;
@@ -941,6 +1031,12 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     let dimension = load_dimension(ws);
 
     let sheet_view = get_sheet_view(ws);
+    if sheet_view.selection != SavedSheetView::default() {
+        views.push(SavedSheetView {
+            sheet_id,
+            ..sheet_view.selection.clone()
+        });
+    }
 
     let default_column_width = get_default_column_width(ws);
     let cols = load_columns(ws, default_column_width)?;
@@ -992,6 +1088,7 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn load_sheets<R: Read + std::io::Seek>(
     archive: &mut zip::read::ZipArchive<R>,
     rels: &HashMap<String, Relationship>,
@@ -1000,6 +1097,7 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
     shared_strings: &mut SharedStringTable,
     theme: &Theme,
     dxfs: &mut Vec<Dxf>,
+    views: &mut Vec<SavedSheetView>,
 ) -> Result<Vec<Worksheet>, XlsxError> {
     // load comments, tables and hyperlink relationships
     let mut sheet_rels = HashMap::new();
@@ -1057,6 +1155,7 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
                 defined_names.clone(),
                 theme,
                 dxfs,
+                views,
             )?;
             sheets.push(s);
         }

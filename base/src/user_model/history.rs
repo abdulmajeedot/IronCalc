@@ -305,6 +305,13 @@ pub(crate) enum Diff {
         old_value: Box<Option<Link>>,
         new_value: Box<Option<Link>>,
     },
+    SetCellComment {
+        sheet: u32,
+        row: i32,
+        column: i32,
+        old_value: Box<Option<crate::types::Comment>>,
+        new_value: Box<Option<crate::types::Comment>>,
+    },
     /// Swaps the priorities of the two CF rules at `index_a` and `index_b`.
     /// `priority_a`/`priority_b` are their priorities *before* the swap.
     SwapConditionalFormattingPriority {

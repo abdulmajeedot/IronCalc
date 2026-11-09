@@ -215,26 +215,25 @@ fn new_sheets_start_at_a1() {
 }
 
 #[test]
-fn the_view_is_not_serialized() {
+fn the_view_is_saved_with_the_workbook() {
     let model = new_empty_model();
     let mut model = UserModel::from_model(model);
     model.new_sheet().unwrap();
     model.set_selected_cell(5, 6).unwrap();
     model.set_top_left_visible_cell(20, 10).unwrap();
 
-    // Opening the workbook again starts at the first sheet, A1
+    // Opening the workbook again goes back to where it was saved
     let model = UserModel::from_bytes(&model.to_bytes(), "en").unwrap();
-    assert_eq!(model.get_selected_sheet(), 0);
-    assert_eq!(model.get_selected_cell(), (0, 1, 1));
+    assert_eq!(model.get_selected_sheet(), 1);
     assert_eq!(
         model.get_selected_view(),
         SelectedView {
-            sheet: 0,
-            row: 1,
-            column: 1,
-            range: [1, 1, 1, 1],
-            top_row: 1,
-            left_column: 1
+            sheet: 1,
+            row: 5,
+            column: 6,
+            range: [5, 6, 5, 6],
+            top_row: 20,
+            left_column: 10
         }
     );
 }

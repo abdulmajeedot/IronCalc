@@ -665,6 +665,7 @@ impl<'a> Model<'a> {
             theme: Default::default(),
             pivot_tables: vec![],
             table_filters: vec![],
+            saved_view: Default::default(),
             slicers: vec![],
         };
         let parsed_formulas = Vec::new();

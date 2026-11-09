@@ -17,7 +17,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::cell::CellValue;
 use crate::model::Model;
-use crate::types::{Border, BorderItem, BorderStyle, Cell, CellType, Color, Fill, Style, Workbook};
+use crate::types::{
+    Border, BorderItem, BorderStyle, Cell, CellType, Color, Fill, SavedView, Style, Workbook,
+};
 
 const HEADER_FILL: &str = "#E3E8F0";
 const TOTAL_FILL: &str = "#F1F4F8";
@@ -785,10 +787,16 @@ struct SavedPivots {
 
 /// Encodes a workbook for saving.
 pub fn workbook_to_bytes(workbook: &Workbook) -> Vec<u8> {
+    workbook_to_bytes_with_view(workbook, &workbook.saved_view)
+}
+
+/// Like [`workbook_to_bytes`], recording `view` as where the user is.
+pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec<u8> {
     let body = bitcode::encode(workbook);
     if workbook.pivot_tables.is_empty()
         && workbook.table_filters.is_empty()
         && workbook.slicers.is_empty()
+        && *view == SavedView::default()
     {
         return body;
     }
@@ -804,6 +812,7 @@ pub fn workbook_to_bytes(workbook: &Workbook) -> Vec<u8> {
     let extras = serde_json::to_string(&SavedExtras {
         table_filters: workbook.table_filters.clone(),
         slicers: workbook.slicers.clone(),
+        view: view.clone(),
     })
     .unwrap_or_default();
     let mut bytes =
@@ -823,6 +832,8 @@ struct SavedExtras {
     table_filters: Vec<crate::table::TableFilterState>,
     #[serde(default)]
     slicers: Vec<crate::table::Slicer>,
+    #[serde(default)]
+    view: SavedView,
 }
 
 fn restore_pivots(workbook: &mut Workbook, pivots: &[u8]) -> Result<(), String> {
@@ -863,6 +874,7 @@ pub fn workbook_from_bytes(bytes: &[u8]) -> Result<Workbook, String> {
             serde_json::from_slice(extras).map_err(|e| format!("Error parsing workbook: {e}"))?;
         workbook.table_filters = extras.table_filters;
         workbook.slicers = extras.slicers;
+        workbook.saved_view = extras.view;
         return Ok(workbook);
     }
     let Some(rest) = bytes.strip_prefix(PIVOT_MAGIC) else {

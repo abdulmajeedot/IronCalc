@@ -17,6 +17,7 @@ use crate::{
     UserModel,
 };
 
+use crate::types::Comment;
 use crate::user_model::history::Diff;
 
 const PARTIAL_MERGE_PASTE_ERROR: &str =
@@ -36,6 +37,9 @@ pub struct ClipboardCell {
     // payloads without the field deserializable)
     #[serde(default)]
     link: Option<Link>,
+    // the note on the cell, if any
+    #[serde(default)]
+    comment: Option<Comment>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -154,6 +158,7 @@ impl<'a> UserModel<'a> {
                     CellStructure::SpillArray { .. } | CellStructure::SpillDynamic { .. }
                 );
                 let link = self.model.get_cell_link(sheet, row, column)?;
+                let comment = self.find_comment(sheet, row, column)?;
                 data_row.insert(
                     column,
                     ClipboardCell {
@@ -161,6 +166,7 @@ impl<'a> UserModel<'a> {
                         is_spill,
                         style,
                         link,
+                        comment,
                     },
                 );
                 text_row.push(text);
@@ -355,6 +361,19 @@ impl<'a> UserModel<'a> {
             let target_row = selected_row + (source_row - source_first_row);
             for (source_column, value) in data_row {
                 let target_column = selected_column + (source_column - source_first_column);
+                let old_comment = self.find_comment(sheet, target_row, target_column)?;
+                if old_comment.as_ref().map(|c| &c.text) != value.comment.as_ref().map(|c| &c.text)
+                {
+                    self.put_comment(sheet, target_row, target_column, value.comment.clone())?;
+                    let new_comment = self.find_comment(sheet, target_row, target_column)?;
+                    diff_list.push(Diff::SetCellComment {
+                        sheet,
+                        row: target_row,
+                        column: target_column,
+                        old_value: Box::new(old_comment),
+                        new_value: Box::new(new_comment),
+                    });
+                }
                 let old_link = self.model.get_cell_link(sheet, target_row, target_column)?;
                 if old_link == value.link {
                     continue;
@@ -464,6 +483,18 @@ impl<'a> UserModel<'a> {
                             row,
                             column,
                             old_value: Box::new(Some(old_link)),
+                            new_value: Box::new(None),
+                        });
+                    }
+
+                    // ... and its note
+                    if let Some(old_comment) = self.find_comment(source_sheet, row, column)? {
+                        self.put_comment(source_sheet, row, column, None)?;
+                        diff_list.push(Diff::SetCellComment {
+                            sheet: source_sheet,
+                            row,
+                            column,
+                            old_value: Box::new(Some(old_comment)),
                             new_value: Box::new(None),
                         });
                     }

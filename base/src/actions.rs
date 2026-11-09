@@ -497,7 +497,67 @@ impl<'a> Model<'a> {
     }
 
     /// Updates the `range` field and formula fields of every CF rule on `sheet` according to `displace_data`.
+    /// Keeps cell comments on their cells when rows or columns move. A comment
+    /// on a deleted row or column goes with it.
+    fn displace_comments(&mut self, sheet: u32, displace_data: &DisplaceData) {
+        // Where a row or column ends up, or `None` if it is deleted.
+        let shifted = |at: i32, delta: i32, line: i32| -> Option<i32> {
+            if delta >= 0 {
+                return Some(if line >= at { line + delta } else { line });
+            }
+            if line < at {
+                Some(line)
+            } else if line < at - delta {
+                None
+            } else {
+                Some(line + delta)
+            }
+        };
+        let moved = |at: i32, delta: i32, line: i32| -> i32 {
+            if line == at {
+                line + delta
+            } else if delta > 0 && line > at && line <= at + delta {
+                line - 1
+            } else if delta < 0 && line < at && line >= at + delta {
+                line + 1
+            } else {
+                line
+            }
+        };
+        let Some(worksheet) = self.workbook.worksheets.get_mut(sheet as usize) else {
+            return;
+        };
+        worksheet.comments.retain_mut(|comment| {
+            let Some(cell) = utils::parse_reference_a1(&comment.cell_ref) else {
+                return true;
+            };
+            let target = match *displace_data {
+                DisplaceData::Row { row, delta, .. } => {
+                    shifted(row, delta, cell.row).map(|r| (r, cell.column))
+                }
+                DisplaceData::Column { column, delta, .. } => {
+                    shifted(column, delta, cell.column).map(|c| (cell.row, c))
+                }
+                DisplaceData::RowMove { row, delta, .. } => {
+                    Some((moved(row, delta, cell.row), cell.column))
+                }
+                DisplaceData::ColumnMove { column, delta, .. } => {
+                    Some((cell.row, moved(column, delta, cell.column)))
+                }
+                _ => Some((cell.row, cell.column)),
+            };
+            let Some((row, column)) = target else {
+                return false;
+            };
+            if let Some(name) = utils::number_to_column(column) {
+                comment.cell_ref = format!("{name}{row}");
+            }
+            true
+        });
+    }
+
     fn displace_cf_ranges(&mut self, sheet: u32, displace_data: &DisplaceData) {
+        self.displace_comments(sheet, displace_data);
         match *displace_data {
             DisplaceData::Row { row, delta, .. } => {
                 self.displace_pivots(sheet, true, row, delta);

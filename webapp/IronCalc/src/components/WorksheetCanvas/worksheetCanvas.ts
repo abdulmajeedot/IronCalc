@@ -1,4 +1,5 @@
 import type {
+  CellComment,
   CellLink,
   CellStyle,
   Color,
@@ -10,7 +11,11 @@ import { getColor } from "../Editor/util";
 import type { Cell } from "../types";
 import type { WorkbookState } from "../workbookState";
 import { Axis } from "./axis";
-import { CellLinks, type LinkHoverCell } from "./cellLinks";
+import {
+  CellLinks,
+  type CommentHoverCell,
+  type LinkHoverCell,
+} from "./cellLinks";
 import {
   type BorderSegment,
   drawBorderLine,
@@ -58,6 +63,7 @@ export interface CanvasSettings {
   onRowHeightChanges: (sheet: number, row: number, height: number) => void;
   onLinkHover?: (cell: LinkHoverCell | null) => void;
   onHideLinkTooltip?: () => void;
+  onCommentHover?: (cell: CommentHoverCell | null) => void;
   // Called with the engine error when an autofill (fill handle drag or
   // double-click) is rejected
   onAutofillError?: (message: string) => void;
@@ -66,6 +72,7 @@ export interface CanvasSettings {
 }
 
 export const devicePixelRatio = window.devicePixelRatio || 1;
+const COMMENT_MARKER_SIZE = 7;
 
 // The last row or column with any part before `edge` (an offset along the
 // axis): the one holding the edge, or the one ending exactly at it
@@ -177,6 +184,8 @@ export default class WorksheetCanvas {
   private paneClip: PaneRect;
 
   private cellLinks: CellLinks;
+  // notes in the selected sheet keyed by "row-column"
+  private comments = new Map<string, CellComment>();
 
   // The borders of the pane being painted, grouped by line style and colour
   // ("style|color"), stroked together once the pane's fills are painted
@@ -268,6 +277,7 @@ export default class WorksheetCanvas {
       onLinkHover: options.onLinkHover,
       onHideTooltip: options.onHideLinkTooltip,
       tooltipCell: options.linkTooltipCell,
+      onCommentHover: options.onCommentHover,
     });
   }
 
@@ -781,6 +791,10 @@ export default class WorksheetCanvas {
     this.cells = [];
 
     this.cellLinks.setSheetLinks(this.model.getLinks(selectedSheet));
+    this.comments.clear();
+    for (const comment of this.model.getComments(selectedSheet)) {
+      this.comments.set(`${comment.row}-${comment.column}`, comment);
+    }
 
     const frozenColumns = this.model.getFrozenColumnsCount(selectedSheet);
     const frozenRows = this.model.getFrozenRowsCount(selectedSheet);
@@ -1189,9 +1203,82 @@ export default class WorksheetCanvas {
         mergeHeight,
         merge,
       );
+      this.renderCommentMarker(
+        merge.row,
+        merge.column,
+        mergeX,
+        mergeY,
+        mergeWidth,
+      );
       return;
     }
     this.renderCellStyleImpl(row, column, x, y, width, height);
+    this.renderCommentMarker(row, column, x, y, width);
+  }
+
+  // The red corner of a cell that has a note
+  private renderCommentMarker(
+    row: number,
+    column: number,
+    x: number,
+    y: number,
+    width: number,
+  ): void {
+    if (width < COMMENT_MARKER_SIZE || !this.comments.has(`${row}-${column}`)) {
+      return;
+    }
+    const context = this.ctx;
+    context.save();
+    context.fillStyle = "#d13438";
+    context.beginPath();
+    context.moveTo(x + width - COMMENT_MARKER_SIZE, y);
+    context.lineTo(x + width, y);
+    context.lineTo(x + width, y + COMMENT_MARKER_SIZE);
+    context.closePath();
+    context.fill();
+    context.restore();
+  }
+
+  // The canvas rectangle of a cell, the whole of it when it is merged
+  getCellRect(
+    row: number,
+    column: number,
+  ): { x: number; y: number; width: number; height: number } {
+    const merge = this.mergeMap.get(`${row}-${column}`);
+    if (merge) {
+      const [x, y, width, height] = this.getMergedRect(merge);
+      return { x, y, width, height };
+    }
+    const selectedSheet = this.selectedSheet();
+    const [x, y] = this.getCoordinatesByCell(row, column);
+    return {
+      x,
+      y,
+      width: this.getColumnWidth(selectedSheet, column),
+      height: this.getRowHeight(selectedSheet, row),
+    };
+  }
+
+  // The cell with a note at canvas coordinates (x, y), if any
+  getCommentCellAt(x: number, y: number): CommentHoverCell | null {
+    if (
+      this.comments.size === 0 ||
+      x < headerColumnWidth ||
+      y < headerRowHeight
+    ) {
+      return null;
+    }
+    const cell = this.getCellByCoordinates(x, y);
+    if (!cell) {
+      return null;
+    }
+    const merge = this.mergeMap.get(`${cell.row}-${cell.column}`);
+    const row = merge?.row ?? cell.row;
+    const column = merge?.column ?? cell.column;
+    const comment = this.comments.get(`${row}-${column}`);
+    return comment
+      ? { row, column, text: comment.text, author: comment.author }
+      : null;
   }
 
   private renderCellStyleImpl(

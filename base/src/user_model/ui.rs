@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     constants::{DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, LAST_COLUMN, LAST_ROW},
     expressions::utils::{is_valid_column_number, is_valid_row},
+    types::{SavedSheetView, SavedView, SheetState},
     worksheet::NavigationDirection,
 };
 
@@ -25,8 +26,8 @@ pub struct SelectedView {
 
 /// The selection and scroll position of a worksheet as seen by the user.
 ///
-/// This is runtime state of the [UserModel]: it is not part of the workbook,
-/// it is not serialized and it is not saved to disk.
+/// This is runtime state of the [UserModel]; [UserModel::saved_view] is what
+/// gets saved of it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WorksheetView {
     /// The row index of the currently selected cell (the anchor of the selection).
@@ -67,9 +68,8 @@ impl Default for WorksheetView {
 /// What the user is looking at: the selected sheet, the size of the window and
 /// the view of every worksheet.
 ///
-/// This is runtime state of the [UserModel]: it is not part of the workbook
-/// and it is not serialized. A workbook always opens on its first sheet with
-/// A1 selected.
+/// This is runtime state of the [UserModel]. A workbook opens where it was
+/// saved: see [UserModel::saved_view].
 pub(crate) struct WorkbookView {
     /// The index of the currently selected sheet.
     pub(crate) sheet: u32,
@@ -130,7 +130,12 @@ impl<'a> UserModel<'a> {
 
     // Returns the anchor of the merged cell containing (row, column), or the
     // cell itself if it is not merged.
-    fn merge_anchor(&self, sheet: u32, row: i32, column: i32) -> Result<(i32, i32), String> {
+    pub(super) fn merge_anchor(
+        &self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+    ) -> Result<(i32, i32), String> {
         Ok(self
             .model
             .workbook
@@ -255,6 +260,93 @@ impl<'a> UserModel<'a> {
             (max_column, min_column)
         };
         Ok([new_start_row, new_start_column, new_end_row, new_end_column])
+    }
+
+    /// Where the user is now, in the form that is saved with the workbook.
+    pub fn saved_view(&self) -> SavedView {
+        let sheets = self
+            .model
+            .workbook
+            .worksheets
+            .iter()
+            .filter_map(|worksheet| {
+                let view = self.view.sheets.get(&worksheet.sheet_id)?;
+                if *view == WorksheetView::default() {
+                    return None;
+                }
+                Some(SavedSheetView {
+                    sheet_id: worksheet.sheet_id,
+                    row: view.row,
+                    column: view.column,
+                    range: view.range,
+                    top_row: view.top_row,
+                    left_column: view.left_column,
+                })
+            })
+            .collect();
+        SavedView {
+            sheet: self.view.sheet,
+            sheets,
+        }
+    }
+
+    /// Goes back to where the workbook was saved. Anything that no longer
+    /// makes sense (a hidden sheet, a cell off the grid) falls back to the
+    /// default.
+    pub(crate) fn restore_saved_view(&mut self) {
+        let saved = self.model.workbook.saved_view.clone();
+        for view in &saved.sheets {
+            // A sheet that can't be restored simply keeps the default view.
+            let _ = self.restore_sheet_view(view);
+        }
+        let worksheets = &self.model.workbook.worksheets;
+        let is_visible = |index: usize| {
+            worksheets
+                .get(index)
+                .is_some_and(|worksheet| worksheet.state == SheetState::Visible)
+        };
+        self.view.sheet = if is_visible(saved.sheet as usize) {
+            saved.sheet
+        } else {
+            (0..worksheets.len()).find(|i| is_visible(*i)).unwrap_or(0) as u32
+        };
+    }
+
+    fn restore_sheet_view(&mut self, saved: &SavedSheetView) -> Result<(), String> {
+        let is_cell = |row: i32, column: i32| is_valid_row(row) && is_valid_column_number(column);
+        if !is_cell(saved.row, saved.column) || !is_cell(saved.top_row, saved.left_column) {
+            return Err("Invalid saved view".to_string());
+        }
+        let sheet = self
+            .model
+            .workbook
+            .worksheets
+            .iter()
+            .position(|worksheet| worksheet.sheet_id == saved.sheet_id)
+            .ok_or_else(|| "Unknown sheet".to_string())? as u32;
+        let (row, column) = self.merge_anchor(sheet, saved.row, saved.column)?;
+        let [a, b, c, d] = saved.range;
+        let range = [a.min(c), b.min(d), a.max(c), b.max(d)];
+        let holds_active_cell =
+            (range[0]..=range[2]).contains(&row) && (range[1]..=range[3]).contains(&column);
+        let range = if is_cell(a, b) && is_cell(c, d) && holds_active_cell {
+            self.grow_range_over_merged_cells(sheet, range)?
+        } else {
+            self.single_cell_range(sheet, row, column)?
+        };
+        let view = self.sheet_view_mut(sheet)?;
+        view.row = row;
+        view.column = column;
+        view.range = range;
+        view.focus_row = if row == range[0] { range[2] } else { range[0] };
+        view.focus_column = if column == range[1] {
+            range[3]
+        } else {
+            range[1]
+        };
+        view.top_row = saved.top_row;
+        view.left_column = saved.left_column;
+        Ok(())
     }
 
     /// Returns the selected sheet index

@@ -25,7 +25,7 @@ use ironcalc_base::{
         parser::{new_parser_english, stringify::to_english_string},
         types::CellReferenceRC,
     },
-    types::{Metadata, Workbook, WorkbookSettings},
+    types::{Metadata, SavedView, Workbook, WorkbookSettings},
     Model,
 };
 
@@ -108,6 +108,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     // stored in x14 `extLst` extensions carry inline `<x14:dxf>` formats that we
     // append to `styles.dxfs`, referencing them back by index from the rule.
     let mut styles = load_styles(&mut archive, &theme)?;
+    let mut sheet_views = Vec::new();
     let worksheets = load_sheets(
         &mut archive,
         &rels,
@@ -116,7 +117,20 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         &mut shared_strings,
         &theme,
         &mut styles.dxfs,
+        &mut sheet_views,
     )?;
+    // `activeTab` counts chart sheets too, which are not loaded.
+    let active_sheet_id = workbook
+        .worksheets
+        .get(workbook.active_tab)
+        .map(|s| s.sheet_id);
+    let saved_view = SavedView {
+        sheet: worksheets
+            .iter()
+            .position(|w| Some(w.sheet_id) == active_sheet_id)
+            .unwrap_or(0) as u32,
+        sheets: sheet_views,
+    };
     // reparse formulas in defined names, since they may refer to sheets and tables that have been loaded
     let worksheet_names = worksheets
         .iter()
@@ -163,6 +177,7 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         pivot_tables,
         table_filters,
         slicers,
+        saved_view,
     };
     pivot::paint_imported_pivots(&mut workbook);
     Ok(workbook)

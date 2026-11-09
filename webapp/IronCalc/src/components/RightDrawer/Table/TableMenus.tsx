@@ -80,6 +80,9 @@ interface TableMenusProps {
   onPaste: () => void;
   onDialog: (dialog: TableDialogState) => void;
   onShowDesign: () => void;
+  hasNote: boolean;
+  onEditNote: () => void;
+  onDeleteNote: () => void;
 }
 
 export const TableMenus = ({
@@ -92,6 +95,9 @@ export const TableMenus = ({
   onPaste,
   onDialog,
   onShowDesign,
+  hasNote,
+  onEditNote,
+  onDeleteNote,
 }: TableMenusProps) => {
   const { t } = useTranslation();
   const [error, setError] = useState("");
@@ -377,6 +383,28 @@ export const TableMenus = ({
         >
           {t("table.table")}
         </MenuItemWithSubmenu>
+        <MenuItem
+          onClick={() => {
+            onClose();
+            onEditNote();
+          }}
+        >
+          {t(
+            hasNote
+              ? "context_menu.cell.edit_note"
+              : "context_menu.cell.new_note",
+          )}
+        </MenuItem>
+        {hasNote ? (
+          <MenuItem
+            onClick={() => {
+              onClose();
+              onDeleteNote();
+            }}
+          >
+            {t("context_menu.cell.delete_note")}
+          </MenuItem>
+        ) : null}
       </Menu>
     </>
   );

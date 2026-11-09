@@ -16,6 +16,14 @@ export interface LinkHoverCell {
   link: CellLink;
 }
 
+// The cell with a note that the pointer is over.
+export interface CommentHoverCell {
+  row: number;
+  column: number;
+  text: string;
+  author: string;
+}
+
 export interface CellLinksOptions {
   // The pointer is over a link cell (or over none when null). Drives the
   // link tooltip shown by the React side.
@@ -24,6 +32,8 @@ export interface CellLinksOptions {
   onHideTooltip?: () => void;
   // The cell whose link tooltip is currently shown (null if hidden)
   tooltipCell: LinkHoverCell | null;
+  // The pointer is over a cell with a note (or over none when null).
+  onCommentHover?: (cell: CommentHoverCell | null) => void;
 }
 
 // Handles the cell links of the selected sheet: hit-testing the rendered
@@ -77,9 +87,19 @@ export class CellLinks {
         event.clientY - rect.top,
       );
       this.options.onLinkHover?.(cell);
+      // Not while dragging a selection, and not through a slicer on top
+      this.options.onCommentHover?.(
+        event.buttons !== 0 || target.closest?.(".ic-slicer")
+          ? null
+          : this.worksheet.getCommentCellAt(
+              event.clientX - rect.left,
+              event.clientY - rect.top,
+            ),
+      );
     };
     container.onpointerleave = () => {
       this.options.onLinkHover?.(null);
+      this.options.onCommentHover?.(null);
     };
     // Ctrl+click (Cmd+click on Mac) on a link cell follows the link. Only the
     // primary button: on Mac Ctrl+click is a right click (context menu).

@@ -73,9 +73,17 @@ pub(super) fn load_workbook<R: Read + std::io::Seek>(
             comment,
         })
     }
+    // <bookViews><workbookView activeTab="2"/></bookViews>
+    let active_tab = doc
+        .descendants()
+        .find(|n| n.has_tag_name("workbookView"))
+        .and_then(|n| n.attribute("activeTab"))
+        .and_then(|tab| tab.parse::<usize>().ok())
+        .unwrap_or(0);
     // read the relationships file
     Ok(WorkbookXML {
         worksheets: sheets,
         defined_names,
+        active_tab,
     })
 }

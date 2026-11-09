@@ -12,7 +12,7 @@ use crate::table::{
     TableColumnFilter, TableEntry, TableFilterItem, TableFilterRule, TableFilterState, TableMarker,
     TableOptions, TableSort, DEFAULT_SLICER_STYLE, DEFAULT_TABLE_STYLE,
 };
-use crate::types::{Cell, Table, TableColumn, TableStyleInfo};
+use crate::types::{Cell, Comment, Table, TableColumn, TableStyleInfo};
 use crate::user_model::common::UserModel;
 use crate::user_model::history::Diff;
 use crate::user_model::pivot::PivotCellDiff;
@@ -27,6 +27,8 @@ pub(crate) struct TableSnapshot {
     tables: HashMap<String, Table>,
     filters: Vec<TableFilterState>,
     slicers: Vec<Slicer>,
+    /// A sheet's comments, kept when rows or columns are deleted.
+    comments: Option<(u32, Vec<Comment>)>,
 }
 
 #[derive(Clone, Encode, Decode)]
@@ -77,7 +79,19 @@ impl UserModel<'_> {
             tables: self.model.workbook.tables.clone(),
             filters: self.model.workbook.table_filters.clone(),
             slicers: self.model.workbook.slicers.clone(),
+            comments: None,
         }
+    }
+
+    fn table_snapshot_with_comments(&self, sheet: u32) -> TableSnapshot {
+        let mut snapshot = self.table_snapshot();
+        snapshot.comments = self
+            .model
+            .workbook
+            .worksheets
+            .get(sheet as usize)
+            .map(|worksheet| (sheet, worksheet.comments.clone()));
+        snapshot
     }
 
     fn table_state_diff(&self, sheet: u32, old: TableSnapshot, new: TableSnapshot) -> Diff {
@@ -90,14 +104,15 @@ impl UserModel<'_> {
         }
     }
 
-    /// A no-op step that lets undo restore tables exactly after rows or
-    /// columns are deleted.
+    /// A no-op step that lets undo restore tables and comments exactly after
+    /// rows or columns are deleted.
     pub(super) fn table_snapshot_diff(&self, sheet: u32) -> Option<Diff> {
         let workbook = &self.model.workbook;
-        if workbook.tables.is_empty() && workbook.slicers.is_empty() {
+        let has_comments = !workbook.worksheets.get(sheet as usize)?.comments.is_empty();
+        if workbook.tables.is_empty() && workbook.slicers.is_empty() && !has_comments {
             return None;
         }
-        let snapshot = self.table_snapshot();
+        let snapshot = self.table_snapshot_with_comments(sheet);
         Some(self.table_state_diff(sheet, snapshot.clone(), snapshot))
     }
 
@@ -105,6 +120,11 @@ impl UserModel<'_> {
         self.model.workbook.tables = snapshot.tables.clone();
         self.model.workbook.table_filters = snapshot.filters.clone();
         self.model.workbook.slicers = snapshot.slicers.clone();
+        if let Some((sheet, comments)) = &snapshot.comments {
+            if let Some(worksheet) = self.model.workbook.worksheets.get_mut(*sheet as usize) {
+                worksheet.comments = comments.clone();
+            }
+        }
         self.model.sync_table_parser();
     }
 
@@ -151,7 +171,7 @@ impl UserModel<'_> {
         regions: &[PivotArea],
         edit: impl FnOnce(&mut Self) -> Result<T, String>,
     ) -> Result<T, String> {
-        let old = self.table_snapshot();
+        let old = self.table_snapshot_with_comments(sheet);
         let mut coordinates = BTreeSet::new();
         let mut row_numbers = BTreeSet::new();
         for area in regions {
@@ -224,7 +244,7 @@ impl UserModel<'_> {
                 });
             }
         }
-        let new = self.table_snapshot();
+        let new = self.table_snapshot_with_comments(sheet);
         self.push_diff_list(vec![Diff::SetTableState {
             sheet,
             old: Box::new(old),
@@ -977,6 +997,14 @@ impl UserModel<'_> {
                 keyed.push((*row, cell));
             }
             keyed.sort_by(|a, b| compare_filter_cells(&a.1, &b.1, descending));
+            let destinations: BTreeMap<i32, i32> = keyed
+                .iter()
+                .map(|(row, _)| *row)
+                .zip(rows.iter().copied())
+                .collect();
+            user.remap_comments(sheet, &area, |row, column| {
+                Some((destinations.get(&row).copied().unwrap_or(row), column))
+            })?;
             let mut moved = Vec::with_capacity(rows.len());
             for (row, _) in &keyed {
                 let mut cells = Vec::new();
@@ -1049,10 +1077,12 @@ impl UserModel<'_> {
         let table = self.table_named(name)?.clone();
         let (first, last) = table_data_rows(&table, &area);
         let mut target = first;
+        let mut destinations = BTreeMap::new();
         for row in first..=area.last_row {
             if doomed.contains(&row) {
                 continue;
             }
+            destinations.insert(row, target);
             if target != row {
                 for column in area.first_column..=area.last_column {
                     let cell = self.take_cell_at(sheet, row, column)?;
@@ -1066,6 +1096,13 @@ impl UserModel<'_> {
                 self.take_cell_at(sheet, row, column)?;
             }
         }
+        let rows = PivotArea {
+            first_row: first,
+            ..area
+        };
+        self.remap_comments(sheet, &rows, |row, column| {
+            destinations.get(&row).map(|target| (*target, column))
+        })?;
         let remaining = (last - first + 1) - doomed.len() as i32;
         let mut moved = area;
         if remaining < 1 {
@@ -1118,6 +1155,11 @@ impl UserModel<'_> {
         }
         let name = name.to_string();
         self.table_edit(sheet, &[area], move |user| {
+            user.remap_comments(sheet, &area, |r, c| match c.cmp(&column) {
+                std::cmp::Ordering::Less => Some((r, c)),
+                std::cmp::Ordering::Equal => None,
+                std::cmp::Ordering::Greater => Some((r, c - 1)),
+            })?;
             for row in area.first_row..=area.last_row {
                 user.take_cell_at(sheet, row, column)?;
                 for c in column + 1..=area.last_column {

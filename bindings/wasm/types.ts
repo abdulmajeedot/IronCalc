@@ -874,6 +874,16 @@ export interface ClipboardCell {
   style: CellStyle;
   /** The link attached to the cell, when present */
   link?: Link | null;
+  /** The note on the cell, when present */
+  comment?: unknown;
+}
+
+/** A note and the cell it is on. */
+export interface CellComment {
+  row: number;
+  column: number;
+  text: string;
+  author: string;
 }
 
 export interface Clipboard {

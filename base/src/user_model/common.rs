@@ -217,8 +217,8 @@ pub struct UserModel<'a> {
     send_queue: Vec<QueueDiffs>,
     pause_evaluation: bool,
     /// What the user is looking at: selected sheet, selection and scroll
-    /// position of each sheet, window size. Runtime state only: it is not
-    /// part of the workbook and is not serialized.
+    /// position of each sheet, window size. Saved with the workbook through
+    /// [`UserModel::saved_view`].
     pub(crate) view: WorkbookView,
 }
 
@@ -252,13 +252,15 @@ impl<'a> Debug for UserModel<'a> {
 impl<'a> UserModel<'a> {
     /// Creates a user model from an existing model
     pub fn from_model(model: Model) -> UserModel {
-        UserModel {
+        let mut user_model = UserModel {
             model,
             history: History::default(),
             send_queue: vec![],
             pause_evaluation: false,
             view: WorkbookView::default(),
-        }
+        };
+        user_model.restore_saved_view();
+        user_model
     }
 
     /// Creates a new UserModel.
@@ -287,13 +289,7 @@ impl<'a> UserModel<'a> {
     /// * [Model::from_bytes]
     pub fn from_bytes(s: &[u8], language_id: &'a str) -> Result<UserModel<'a>, String> {
         let model = Model::from_bytes(s, language_id)?;
-        Ok(UserModel {
-            model,
-            history: History::default(),
-            send_queue: vec![],
-            pause_evaluation: false,
-            view: WorkbookView::default(),
-        })
+        Ok(UserModel::from_model(model))
     }
 
     /// Returns the internal representation of a model
@@ -301,7 +297,7 @@ impl<'a> UserModel<'a> {
     /// See also:
     ///  * [Model::to_bytes]
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.model.to_bytes()
+        crate::pivot::workbook_to_bytes_with_view(&self.model.workbook, &self.saved_view())
     }
 
     /// Returns the internal model
@@ -790,6 +786,7 @@ impl<'a> UserModel<'a> {
         }
         // Clearing the cells also removes their links: capture them for undo
         let link_diffs = self.range_link_diffs(range)?;
+        let comment_diffs = self.remove_range_comments(range)?;
         self.model.range_clear_all(range)?;
         let mut diff_list = vec![Diff::RangeClearAll {
             sheet,
@@ -801,6 +798,7 @@ impl<'a> UserModel<'a> {
             old_style,
         }];
         diff_list.extend(link_diffs);
+        diff_list.extend(comment_diffs);
 
         self.push_diff_list(diff_list);
         self.evaluate_if_not_paused();

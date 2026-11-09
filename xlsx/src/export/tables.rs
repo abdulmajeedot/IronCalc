@@ -21,6 +21,10 @@ const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006
 const TABLE_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/table";
 const DRAWING_REL: &str =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing";
+const COMMENTS_REL: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+const VML_DRAWING_REL: &str =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
 const SLICER_REL: &str = "http://schemas.microsoft.com/office/2007/relationships/slicer";
 const SLICER_CACHE_REL: &str = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
 
@@ -35,12 +39,24 @@ fn emu(pixels: f64) -> i64 {
 pub(crate) struct SheetExtras {
     rels: Vec<(&'static str, String)>,
     drawing: Option<usize>,
+    legacy_drawing: Option<usize>,
     tables: Vec<usize>,
     pivot_slicers: Option<usize>,
     table_slicers: Option<usize>,
 }
 
 impl SheetExtras {
+    /// Links the sheet to comments part number `number` and its drawing.
+    pub(crate) fn add_comments(&mut self, number: usize) {
+        self.rels
+            .push((COMMENTS_REL, format!("../comments{number}.xml")));
+        self.rels.push((
+            VML_DRAWING_REL,
+            format!("../drawings/vmlDrawing{number}.vml"),
+        ));
+        self.legacy_drawing = Some(self.rels.len() - 1);
+    }
+
     /// `Relationship` elements, numbered after the `base` the sheet already has.
     pub(crate) fn rels_xml(&self, base: usize) -> Vec<String> {
         self.rels
@@ -55,11 +71,17 @@ impl SheetExtras {
             .collect()
     }
 
-    /// The `<drawing>` and `<tableParts>` elements.
+    /// The `<drawing>`, `<legacyDrawing>` and `<tableParts>` elements, in that order.
     pub(crate) fn parts_xml(&self, base: usize) -> String {
         let mut xml = String::new();
         if let Some(drawing) = self.drawing {
             xml.push_str(&format!("<drawing r:id=\"rId{}\"/>", base + drawing + 1));
+        }
+        if let Some(drawing) = self.legacy_drawing {
+            xml.push_str(&format!(
+                "<legacyDrawing r:id=\"rId{}\"/>",
+                base + drawing + 1
+            ));
         }
         if !self.tables.is_empty() {
             let parts: String = self

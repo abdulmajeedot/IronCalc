@@ -1,4 +1,11 @@
-import { Clipboard, Copy, Plus, Scissors, Trash2 } from "lucide-react";
+import {
+  Clipboard,
+  Copy,
+  Plus,
+  Scissors,
+  StickyNote,
+  Trash2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Menu } from "../../Menu/Menu";
 import { MenuDivider } from "../../Menu/MenuDivider";
@@ -19,6 +26,9 @@ interface CellContextMenuProps {
   onCut: () => void;
   onCopy: () => void;
   onPaste: () => void;
+  hasNote: boolean;
+  onEditNote: () => void;
+  onDeleteNote: () => void;
 }
 
 const CellContextMenu = (properties: CellContextMenuProps) => {
@@ -38,6 +48,9 @@ const CellContextMenu = (properties: CellContextMenuProps) => {
     onCut,
     onCopy,
     onPaste,
+    hasNote,
+    onEditNote,
+    onDeleteNote,
   } = properties;
 
   if (!anchorPosition) {
@@ -96,6 +109,21 @@ const CellContextMenu = (properties: CellContextMenuProps) => {
       >
         {t("context_menu.cell.delete")}
       </MenuItemWithSubmenu>
+
+      <MenuDivider />
+
+      <MenuItem icon={<StickyNote />} onClick={onEditNote}>
+        {t(
+          hasNote
+            ? "context_menu.cell.edit_note"
+            : "context_menu.cell.new_note",
+        )}
+      </MenuItem>
+      {hasNote ? (
+        <MenuItem onClick={onDeleteNote}>
+          {t("context_menu.cell.delete_note")}
+        </MenuItem>
+      ) : null}
     </Menu>
   );
 };

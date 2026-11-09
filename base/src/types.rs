@@ -129,6 +129,45 @@ pub struct Workbook {
     pub table_filters: Vec<crate::table::TableFilterState>,
     #[bitcode(skip)]
     pub slicers: Vec<crate::table::Slicer>,
+    /// Where the user was when the workbook was saved. Saved next to the workbook.
+    #[bitcode(skip)]
+    pub saved_view: SavedView,
+}
+
+/// The sheet on screen when a workbook was saved, and what each sheet showed.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Default)]
+pub struct SavedView {
+    /// Index of the sheet on screen.
+    #[serde(default)]
+    pub sheet: u32,
+    /// Only the sheets that are not at A1 with nothing scrolled.
+    #[serde(default)]
+    pub sheets: Vec<SavedSheetView>,
+}
+
+/// The selection and scroll position of one sheet.
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct SavedSheetView {
+    pub sheet_id: u32,
+    pub row: i32,
+    pub column: i32,
+    /// `[first_row, first_column, last_row, last_column]`
+    pub range: [i32; 4],
+    pub top_row: i32,
+    pub left_column: i32,
+}
+
+impl Default for SavedSheetView {
+    fn default() -> Self {
+        SavedSheetView {
+            sheet_id: 0,
+            row: 1,
+            column: 1,
+            range: [1, 1, 1, 1],
+            top_row: 1,
+            left_column: 1,
+        }
+    }
 }
 
 /// A defined name. The `sheet_id` is the sheet index in case the name is local.
@@ -411,7 +450,7 @@ impl Default for Cell {
     }
 }
 
-#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Encode, Decode, Debug, PartialEq, Eq, Clone)]
 pub struct Comment {
     pub text: String,
     pub author_name: String,

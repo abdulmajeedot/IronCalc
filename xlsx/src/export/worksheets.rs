@@ -34,7 +34,7 @@ use ironcalc_base::{
         types::CellReferenceRC,
         utils::number_to_column,
     },
-    types::{ArrayKind, Cell, FormulaValue, Link, SpillValue, Worksheet},
+    types::{ArrayKind, Cell, Color, FormulaValue, Link, SavedSheetView, SpillValue, Worksheet},
 };
 
 use crate::export::conditional_formatting::get_conditional_formatting_xml;
@@ -125,6 +125,25 @@ fn get_tooltip_attribute(tooltip: &Option<String>) -> String {
     }
 }
 
+/// `<sheetPr>` with the tab color, or nothing for a sheet without one.
+fn get_sheet_properties(color: &Color) -> String {
+    let attributes = match color {
+        Color::Rgb(hex) => {
+            let hex = hex.trim_start_matches('#');
+            if hex.len() != 6 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+                return String::new();
+            }
+            format!("rgb=\"FF{}\"", hex.to_ascii_uppercase())
+        }
+        Color::Theme(theme, tint) if *tint != 0.0 => {
+            format!("theme=\"{theme}\" tint=\"{tint}\"")
+        }
+        Color::Theme(theme, _) => format!("theme=\"{theme}\""),
+        Color::None => return String::new(),
+    };
+    format!("<sheetPr><tabColor {attributes}/></sheetPr>")
+}
+
 /// How many relationships a worksheet has before those of its tables and slicers.
 pub(crate) fn worksheet_rel_base(worksheet: &Worksheet, pivots: usize) -> usize {
     let links = get_sorted_links(worksheet)
@@ -206,6 +225,7 @@ pub(crate) fn get_worksheet_xml(
     parsed_formulas: &[(std::sync::Arc<Node>, StaticResult)],
     dimension: &str,
     is_sheet_selected: bool,
+    view: Option<&SavedSheetView>,
     extra_parts: &str,
     extra_ext: &str,
 ) -> String {
@@ -635,9 +655,24 @@ pub(crate) fn get_worksheet_xml(
         ""
     };
 
-    // IronCalc does not keep track of the selection: it is always A1.
-    let active_cell = "A1";
-    let sqref = "A1";
+    let view = view.cloned().unwrap_or_default();
+    let cell_name = |row: i32, column: i32| {
+        format!(
+            "{}{row}",
+            number_to_column(column).unwrap_or("A".to_string())
+        )
+    };
+    let active_cell = cell_name(view.row, view.column);
+    let [first_row, first_column, last_row, last_column] = view.range;
+    let sqref = if (first_row, first_column) == (last_row, last_column) {
+        cell_name(first_row, first_column)
+    } else {
+        format!(
+            "{}:{}",
+            cell_name(first_row, first_column),
+            cell_name(last_row, last_column)
+        )
+    };
 
     let merge_cells_section = if merged_cells_count > 0 {
         format!(
@@ -652,12 +687,27 @@ pub(crate) fn get_worksheet_xml(
     let frozen_rows = worksheet.frozen_rows;
     let frozen_columns = worksheet.frozen_columns;
 
+    // The first cell scrolled into view, below and right of anything frozen.
+    let top_row = view.top_row.max(frozen_rows + 1);
+    let left_column = view.left_column.max(frozen_columns + 1);
+    let view_top_left = match (frozen_rows > 0, frozen_columns > 0) {
+        (false, false) if (top_row, left_column) != (1, 1) => cell_name(top_row, left_column),
+        (true, false) if left_column > 1 => cell_name(1, left_column),
+        (false, true) if top_row > 1 => cell_name(top_row, 1),
+        _ => String::new(),
+    };
+    let view_top_left = if view_top_left.is_empty() {
+        view_top_left
+    } else {
+        format!(" topLeftCell=\"{view_top_left}\"")
+    };
+
     let pane = if frozen_rows > 0 && frozen_columns > 0 {
         // There are both frozen rows and columns. There are four panes.
         // The first column is the first column after the last frozen column.
         let first_column = number_to_column(frozen_columns + 1).unwrap_or("A".to_string());
         // This is the top left cell of the bottom right pane.
-        let top_left_cell = format!("{}{}", first_column, frozen_rows + 1);
+        let top_left_cell = cell_name(top_row, left_column);
         // The meaning of the next two is irrelevant for IronCalc.
         let top_right_active_cell = format!("{first_column}1");
         let bottom_left_active_cell = format!("A{}", frozen_rows + 1);
@@ -670,16 +720,13 @@ pub(crate) fn get_worksheet_xml(
         )
     } else if frozen_rows > 0 {
         // Only frozen rows
-        let top_left_cell = format!("A{}", frozen_rows + 1);
+        let top_left_cell = cell_name(top_row, left_column);
         format!(
             "<pane ySplit=\"{frozen_rows}\" topLeftCell=\"{top_left_cell}\" activePane=\"bottomLeft\" state=\"frozen\"/>\
             <selection pane=\"bottomLeft\" activeCell=\"{active_cell}\" sqref=\"{sqref}\"/>",
         )
     } else if frozen_columns > 0 {
-        let top_left_cell = format!(
-            "{}1",
-            number_to_column(frozen_columns + 1).unwrap_or("A".to_string())
-        );
+        let top_left_cell = cell_name(top_row, left_column);
         format!(
             "<pane xSplit=\"{frozen_columns}\" topLeftCell=\"{top_left_cell}\" activePane=\"topRight\" state=\"frozen\"/>\
              <selection pane=\"topRight\" activeCell=\"{active_cell}\" sqref=\"{sqref}\"/>"
@@ -693,6 +740,7 @@ pub(crate) fn get_worksheet_xml(
         get_conditional_formatting_xml(&worksheet.conditional_formatting);
 
     let hyperlinks_section = get_hyperlinks_section(worksheet);
+    let sheet_properties = get_sheet_properties(&worksheet.color);
     let ext_lst = match (cf_ext_lst.strip_suffix("</extLst>"), extra_ext.is_empty()) {
         (_, true) => cf_ext_lst.clone(),
         (Some(open), false) => format!("{open}{extra_ext}</extLst>"),
@@ -702,9 +750,10 @@ pub(crate) fn get_worksheet_xml(
     format!(
         "{XML_DECLARATION}\
 <worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+  {sheet_properties}\
   <dimension ref=\"{dimension}\"/>\
   <sheetViews>\
-    <sheetView workbookViewId=\"0\"{show_grid_lines}{tab_selected}>\
+    <sheetView workbookViewId=\"0\"{show_grid_lines}{tab_selected}{view_top_left}>\
         {pane}\
     </sheetView>\
   </sheetViews>\

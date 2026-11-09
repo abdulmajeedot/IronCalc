@@ -154,12 +154,15 @@
       "cut": "Cut",
       "delete": "Delete...",
       "delete_column": "Column '{{column}}'",
+      "delete_note": "Delete Note",
       "delete_row": "Row '{{row}}'",
+      "edit_note": "Edit Note",
       "insert": "Insert...",
       "insert_column_left": "Column left",
       "insert_column_right": "Column right",
       "insert_row_above": "Row above",
       "insert_row_below": "Row below",
+      "new_note": "New Note",
       "paste": "Paste"
     },
     "column_header": {
@@ -321,6 +324,10 @@
   "navigation": {
     "add_sheet": "Add sheet",
     "sheet_list": "Sheet list"
+  },
+  "note": {
+    "label": "Cell note",
+    "placeholder": "Type a note"
   },
   "num_fmt": {
     "cancel": "Cancel",

@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
 mod _rels;
+mod comments;
 mod conditional_formatting;
 mod doc_props;
 mod dxfs_styles;
@@ -23,7 +24,7 @@ use std::{
 };
 
 use ironcalc_base::expressions::utils::number_to_column;
-use ironcalc_base::types::{SheetState, Workbook};
+use ironcalc_base::types::{SavedView, SheetState, Workbook, Worksheet};
 use ironcalc_base::{get_milliseconds_since_epoch, Model};
 
 use self::xml_constants::XML_DECLARATION;
@@ -84,14 +85,27 @@ pub fn save_to_xlsx(model: &Model, file_name: &str) -> Result<(), XlsxError> {
 }
 
 pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<W, XlsxError> {
+    save_xlsx_view_to_writer(model, &model.workbook.saved_view, writer)
+}
+
+/// Like [`save_xlsx_to_writer`], recording `view` as the place the file opens at.
+pub fn save_xlsx_view_to_writer<W: Write + Seek>(
+    model: &Model,
+    view: &SavedView,
+    writer: W,
+) -> Result<W, XlsxError> {
     let workbook = &model.workbook;
-    // IronCalc does not keep track of the selected sheet: the active tab is
-    // the first visible sheet.
-    let selected_sheet = workbook
+    let is_visible = |ws: &Worksheet| ws.state == SheetState::Visible;
+    // A hidden sheet can't be the active one.
+    let selected_sheet = if workbook
         .worksheets
-        .iter()
-        .position(|ws| ws.state == SheetState::Visible)
-        .unwrap_or(0) as u32;
+        .get(view.sheet as usize)
+        .is_some_and(is_visible)
+    {
+        view.sheet
+    } else {
+        workbook.worksheets.iter().position(is_visible).unwrap_or(0) as u32
+    };
     let mut zip = zip::ZipWriter::new(writer);
 
     let options = zip::write::SimpleFileOptions::default();
@@ -99,7 +113,8 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
     // root folder
     zip.start_file("[Content_Types].xml", options)?;
     let mut pivots = pivot::export_pivots(model);
-    let extras = tables::export_extras(model, &mut pivots);
+    let mut extras = tables::export_extras(model, &mut pivots);
+    comments::export_comments(workbook, &mut extras);
     zip.write_all(get_content_types_xml(workbook, &pivots, &extras).as_bytes())?;
 
     zip.add_directory("docProps", options)?;
@@ -202,6 +217,9 @@ pub fn save_xlsx_to_writer<W: Write + Seek>(model: &Model, writer: W) -> Result<
                 &model.parsed_formulas[sheet_index],
                 sheet_dimension_str,
                 is_sheet_selected,
+                view.sheets
+                    .iter()
+                    .find(|v| v.sheet_id == worksheet.sheet_id),
                 &sheet_extras.parts_xml(rel_base),
                 &sheet_extras.ext_xml(rel_base),
             )

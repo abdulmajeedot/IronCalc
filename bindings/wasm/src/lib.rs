@@ -921,6 +921,48 @@ impl Model {
             .map_err(to_js_error)
     }
 
+    /// Returns the notes of a sheet sorted by (row, column).
+    #[wasm_bindgen(js_name = "getComments", unchecked_return_type = "CellComment[]")]
+    pub fn get_comments(&self, sheet: u32) -> Result<JsValue, JsError> {
+        to_js(&self.model.get_comments(sheet).map_err(to_js_error)?)
+    }
+
+    /// Returns the note of a cell, if it has one.
+    #[wasm_bindgen(
+        js_name = "getComment",
+        unchecked_return_type = "CellComment | undefined"
+    )]
+    pub fn get_comment(&self, sheet: u32, row: i32, column: i32) -> Result<JsValue, JsError> {
+        to_js(
+            &self
+                .model
+                .get_comment(sheet, row, column)
+                .map_err(to_js_error)?,
+        )
+    }
+
+    /// Writes the note of a cell.
+    #[wasm_bindgen(js_name = "setComment")]
+    pub fn set_comment(
+        &mut self,
+        sheet: u32,
+        row: i32,
+        column: i32,
+        text: &str,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_comment(sheet, row, column, text)
+            .map_err(to_js_error)
+    }
+
+    /// Removes the note of a cell.
+    #[wasm_bindgen(js_name = "deleteComment")]
+    pub fn delete_comment(&mut self, sheet: u32, row: i32, column: i32) -> Result<(), JsError> {
+        self.model
+            .delete_comment(sheet, row, column)
+            .map_err(to_js_error)
+    }
+
     /// Returns all the links in the worksheet sorted by (row, column).
     #[wasm_bindgen(js_name = "getLinks", unchecked_return_type = "CellLink[]")]
     pub fn get_links(&self, sheet: u32) -> Result<JsValue, JsError> {
@@ -1099,8 +1141,12 @@ impl Model {
     #[wasm_bindgen(js_name = "toXlsx")]
     pub fn to_xlsx(&self) -> Result<Vec<u8>, JsError> {
         let writer = std::io::Cursor::new(Vec::new());
-        let writer = ironcalc::export::save_xlsx_to_writer(self.model.get_model(), writer)
-            .map_err(|e| to_js_error(e.to_string()))?;
+        let writer = ironcalc::export::save_xlsx_view_to_writer(
+            self.model.get_model(),
+            &self.model.saved_view(),
+            writer,
+        )
+        .map_err(|e| to_js_error(e.to_string()))?;
         Ok(writer.into_inner())
     }
 

@@ -154,12 +154,15 @@
       "cut": "Cortar",
       "delete": "Eliminar...",
       "delete_column": "Columna '{{column}}'",
+      "delete_note": "Eliminar nota",
       "delete_row": "Fila '{{row}}'",
+      "edit_note": "Editar nota",
       "insert": "Insertar...",
       "insert_column_left": "Columna a la izquierda",
       "insert_column_right": "Columna a la derecha",
       "insert_row_above": "Fila encima",
       "insert_row_below": "Fila debajo",
+      "new_note": "Nueva nota",
       "paste": "Pegar"
     },
     "column_header": {
@@ -321,6 +324,10 @@
   "navigation": {
     "add_sheet": "Añadir hoja",
     "sheet_list": "Lista de hojas"
+  },
+  "note": {
+    "label": "Nota de celda",
+    "placeholder": "Escribe una nota"
   },
   "num_fmt": {
     "cancel": "Cancelar",

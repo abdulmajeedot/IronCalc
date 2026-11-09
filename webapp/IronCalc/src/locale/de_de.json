@@ -154,12 +154,15 @@
       "cut": "Ausschneiden",
       "delete": "Löschen...",
       "delete_column": "Spalte '{{column}}'",
+      "delete_note": "Notiz löschen",
       "delete_row": "Zeile '{{row}}'",
+      "edit_note": "Notiz bearbeiten",
       "insert": "Einfügen...",
       "insert_column_left": "Spalte links",
       "insert_column_right": "Spalte rechts",
       "insert_row_above": "Zeile oben",
       "insert_row_below": "Zeile unten",
+      "new_note": "Neue Notiz",
       "paste": "Einfügen"
     },
     "column_header": {
@@ -321,6 +324,10 @@
   "navigation": {
     "add_sheet": "Tabellenblatt hinzufügen",
     "sheet_list": "Tabellenblattliste"
+  },
+  "note": {
+    "label": "Zellnotiz",
+    "placeholder": "Notiz eingeben"
   },
   "num_fmt": {
     "cancel": "Abbrechen",

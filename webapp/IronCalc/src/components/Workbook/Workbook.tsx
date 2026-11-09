@@ -79,6 +79,7 @@ const Workbook = (
   const rootRef = useRef<HTMLDivElement | null>(null);
   const worksheetRef = useRef<{
     getCanvas: () => WorksheetCanvas | null;
+    editNote: () => void;
   }>(null);
   const lastClipboardJson = useRef<string | null>(null);
 
@@ -157,7 +158,7 @@ const Workbook = (
     // Prevents the workbook from stealing focus when the user is interacting with the color picker, border picker, advanced color picker, or a modal dialog
     if (
       active?.closest(
-        ".ic-color-picker, .ic-advanced-color-picker-panel, .ic-border-picker, .ic-modal-dialog",
+        ".ic-color-picker, .ic-advanced-color-picker-panel, .ic-border-picker, .ic-modal-dialog, .ic-worksheet-note-editor",
       )
     ) {
       return;
@@ -622,6 +623,7 @@ const Workbook = (
   // the Rust backend
   const { onKeyDown } = useKeyboardNavigation({
     canEdit,
+    onEditNote: (): void => worksheetRef.current?.editNote(),
     onCellsDeleted: (): void => {
       const {
         sheet,
