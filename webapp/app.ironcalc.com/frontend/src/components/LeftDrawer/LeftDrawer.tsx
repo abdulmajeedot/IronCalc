@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { BackendDocument } from "../documents";
+import type { BackendDocument, DocumentSnapshot } from "../documents";
 import DrawerContent from "./DrawerContent";
 import DrawerFooter from "./DrawerFooter";
 import DrawerHeader from "./DrawerHeader";
@@ -13,6 +13,12 @@ interface LeftDrawerProps {
   onDelete: (uuid: string) => void;
   onOpenDocument: (document: BackendDocument) => Promise<void>;
   onUploadDocument: () => Promise<void>;
+  onInsertReference: (
+    document: BackendDocument,
+    snapshot: DocumentSnapshot,
+    sheet: string,
+    range: string,
+  ) => string | null;
 }
 
 function LeftDrawer({
@@ -22,6 +28,7 @@ function LeftDrawer({
   onDelete,
   onOpenDocument,
   onUploadDocument,
+  onInsertReference,
 }: LeftDrawerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const {
@@ -44,6 +51,7 @@ function LeftDrawer({
           onDelete={onDelete}
           onOpenDocument={onOpenDocument}
           onUploadDocument={onUploadDocument}
+          onInsertReference={onInsertReference}
           searchQuery={searchQuery}
           checkedUuids={checkedUuids}
           onCheckboxClick={handleCheckboxClick}

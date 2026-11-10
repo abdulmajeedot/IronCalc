@@ -9,7 +9,15 @@ const documents = vi.hoisted(() => ({
 vi.mock("./documents", () => documents);
 
 import type { Model } from "@ironcalc/workbook";
-import { readsBack, refreshLinkedWorkbooks } from "./linkedWorkbooks";
+import {
+  canLinkTo,
+  insertReference,
+  isValidRange,
+  readsBack,
+  referenceFormula,
+  refreshLinkedWorkbooks,
+  selectionRange,
+} from "./linkedWorkbooks";
 
 type ExternalBook = ReturnType<Model["getExternalBooks"]>[number];
 
@@ -142,6 +150,15 @@ describe("refreshLinkedWorkbooks", () => {
     expect(setLinkedWorkbook).toHaveBeenCalledOnce();
   });
 
+  it("keeps reporting a missing name while waiting to look again", async () => {
+    documents.listDocuments.mockResolvedValue([]);
+    const name = freshName();
+    const { model } = fakeModel([{ name, document_id: null, version: null }]);
+    await refreshLinkedWorkbooks(model, true);
+    const again = await refreshLinkedWorkbooks(model, true);
+    expect(again.missing).toEqual([name]);
+  });
+
   it("does nothing without a token", async () => {
     documents.getToken.mockReturnValue(null);
     const { model } = fakeModel([
@@ -178,5 +195,65 @@ describe("readsBack", () => {
 
   it("is false for a workbook that isn't on the backend", () => {
     expect(readsBack([doc("a", ["a"])], "a", null)).toBe(false);
+  });
+});
+
+describe("picking cells from another workbook", () => {
+  it("writes a selection as a fixed reference", () => {
+    const a1 = { row: 1, column: 1 };
+    expect(selectionRange(a1, a1)).toBe("$A$1");
+    expect(selectionRange({ row: 3, column: 28 }, a1)).toBe("$A$1:$AB$3");
+  });
+
+  it("recognises ranges", () => {
+    expect(isValidRange("$A$1:$B$2")).toBe(true);
+    expect(isValidRange(" c7 ")).toBe(true);
+    expect(isValidRange("A")).toBe(false);
+    expect(isValidRange("A0")).toBe(false);
+    expect(isValidRange("A1:")).toBe(false);
+  });
+
+  it("quotes the sheet and names the book", () => {
+    expect(referenceFormula("Sales", "Bob's Q1", "$a$1")).toBe(
+      "='[Sales]Bob''s Q1'!$A$1",
+    );
+  });
+
+  it("only links names a formula can hold", () => {
+    expect(canLinkTo("Sales 2026")).toBe(true);
+    expect(canLinkTo("Bob's")).toBe(false);
+    expect(canLinkTo("a[b]")).toBe(false);
+    expect(canLinkTo("")).toBe(false);
+  });
+
+  function insertModel(books: ExternalBook[]) {
+    const setUserInput = vi.fn();
+    const setLinkedWorkbook = vi.fn();
+    const model = {
+      getExternalBooks: () => books,
+      getSelectedView: () => ({ sheet: 2, row: 4, column: 5 }),
+      setLinkedWorkbook,
+      setUserInput,
+    } as unknown as Model;
+    return { model, setUserInput, setLinkedWorkbook };
+  }
+
+  it("links first so the formula has a value at once", () => {
+    const { model, setUserInput, setLinkedWorkbook } = insertModel([]);
+    expect(
+      insertReference(model, sales, snapshot as never, "Sheet1", "$A$1"),
+    ).toBeNull();
+    expect(setLinkedWorkbook).toHaveBeenCalledBefore(setUserInput);
+    expect(setUserInput).toHaveBeenCalledWith(2, 4, 5, "='[Sales]Sheet1'!$A$1");
+  });
+
+  it("won't take over a name linked to another document", () => {
+    const { model, setUserInput } = insertModel([
+      { name: "Sales", document_id: "other", version: 1 },
+    ]);
+    expect(
+      insertReference(model, sales, snapshot as never, "Sheet1", "$A$1"),
+    ).toBe("name_in_use");
+    expect(setUserInput).not.toHaveBeenCalled();
   });
 });

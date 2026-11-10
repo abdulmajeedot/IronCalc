@@ -3,6 +3,7 @@
 import type { Model } from "@ironcalc/workbook";
 import {
   type BackendDocument,
+  type DocumentSnapshot,
   getSelectedDocumentId,
   getToken,
   listDocuments,
@@ -75,14 +76,14 @@ export async function refreshLinkedWorkbooks(
     return result;
   }
   const now = Date.now();
-  const books = model
-    .getExternalBooks()
-    .filter(
-      (book) =>
-        !live ||
-        Boolean(book.document_id) ||
-        now - (lastLookedFor.get(book.name) ?? 0) >= RETRY_MISSING_MS,
-    );
+  const known = model.getExternalBooks();
+  // A name nothing had moments ago still has nothing: no need to ask again.
+  const isWaiting = (book: (typeof known)[number]) =>
+    live &&
+    !book.document_id &&
+    now - (lastLookedFor.get(book.name) ?? 0) < RETRY_MISSING_MS;
+  result.missing = known.filter(isWaiting).map((book) => book.name);
+  const books = known.filter((book) => !isWaiting(book));
   if (books.length === 0) {
     return result;
   }
@@ -127,4 +128,76 @@ export async function refreshLinkedWorkbooks(
     refreshing = false;
   }
   return result;
+}
+
+const RANGE = /^\$?[A-Z]{1,3}\$?[1-9]\d*(:\$?[A-Z]{1,3}\$?[1-9]\d*)?$/i;
+
+export function isValidRange(range: string): boolean {
+  return RANGE.test(range.trim());
+}
+
+export function columnName(column: number): string {
+  let name = "";
+  for (let rest = column; rest > 0; rest = Math.floor((rest - 1) / 26)) {
+    name = String.fromCharCode(65 + ((rest - 1) % 26)) + name;
+  }
+  return name;
+}
+
+// Picked cells as a fixed reference, the way Excel writes one to another file.
+export function selectionRange(
+  a: { row: number; column: number },
+  b: { row: number; column: number },
+): string {
+  const cell = (row: number, column: number) => `$${columnName(column)}$${row}`;
+  const first = cell(Math.min(a.row, b.row), Math.min(a.column, b.column));
+  const last = cell(Math.max(a.row, b.row), Math.max(a.column, b.column));
+  return first === last ? first : `${first}:${last}`;
+}
+
+export function canLinkTo(name: string): boolean {
+  return name !== "" && !/[[\]']/.test(name);
+}
+
+export function referenceFormula(
+  book: string,
+  sheet: string,
+  range: string,
+): string {
+  return `='[${book}]${sheet.replace(/'/g, "''")}'!${range.trim().toUpperCase()}`;
+}
+
+export type InsertFailure = "invalid_name" | "name_in_use";
+
+// Links a document and puts a reference to it in the selected cell.
+export function insertReference(
+  model: Model,
+  document: BackendDocument,
+  snapshot: DocumentSnapshot,
+  sheet: string,
+  range: string,
+): InsertFailure | null {
+  if (!canLinkTo(document.name)) {
+    return "invalid_name";
+  }
+  const taken = model
+    .getExternalBooks()
+    .find((book) => book.name === document.name);
+  if (taken?.document_id && taken.document_id !== document.id) {
+    return "name_in_use";
+  }
+  model.setLinkedWorkbook(
+    document.name,
+    document.id,
+    snapshot.version,
+    snapshot.sheets as Parameters<Model["setLinkedWorkbook"]>[3],
+  );
+  const view = model.getSelectedView();
+  model.setUserInput(
+    view.sheet,
+    view.row,
+    view.column,
+    referenceFormula(document.name, sheet, range),
+  );
+  return null;
 }

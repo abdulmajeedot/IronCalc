@@ -1,4 +1,10 @@
 {
+  "common": {
+    "cancel": "Cancelar"
+  },
+  "right_drawer": {
+    "close": "Cerrar"
+  },
   "app": {
     "title": "IronCalc"
   },
@@ -53,6 +59,17 @@
   },
   "left_drawer": {
     "backend": {
+      "reference": "Insertar una referencia a este libro",
+      "reference_title": "Referencia a {{name}}",
+      "reference_insert": "Insertar",
+      "reference_sheet": "Hoja",
+      "reference_range": "Celdas",
+      "reference_hint": "Haz clic en una celda, o Mayús+clic para un rango. La fórmula se escribe en la celda seleccionada.",
+      "reference_invalid_name": "El nombre de este documento no se puede usar en una fórmula porque contiene [, ] o '. Cámbialo primero.",
+      "reference_name_in_use": "Otro documento con este nombre ya está vinculado en este libro.",
+      "reference_failed": "No se pudo añadir la referencia a la celda seleccionada.",
+      "missing_message": "No se encuentra \"{{names}}\" en el servidor. Las fórmulas que lo usan conservan sus últimos valores o muestran #REF!.",
+      "dismiss": "Descartar",
       "circular_message": "\"{{names}}\" también lee este libro, así que no se actualiza automáticamente mientras este esté abierto.",
       "update_once": "Actualizar una vez",
       "title": "Documentos del servidor",

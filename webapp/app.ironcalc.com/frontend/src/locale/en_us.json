@@ -1,4 +1,10 @@
 {
+  "common": {
+    "cancel": "Cancel"
+  },
+  "right_drawer": {
+    "close": "Close"
+  },
   "app": {
     "title": "IronCalc"
   },
@@ -53,6 +59,17 @@
   },
   "left_drawer": {
     "backend": {
+      "reference": "Insert a reference to this workbook",
+      "reference_title": "Reference to {{name}}",
+      "reference_insert": "Insert",
+      "reference_sheet": "Sheet",
+      "reference_range": "Cells",
+      "reference_hint": "Click a cell, or Shift+click for a range. The formula goes in the selected cell.",
+      "reference_invalid_name": "This document's name can't be used in a formula because it contains [, ] or '. Rename it first.",
+      "reference_name_in_use": "Another document with this name is already linked in this workbook.",
+      "reference_failed": "The reference couldn't be added to the selected cell.",
+      "missing_message": "\"{{names}}\" can't be found on the backend. Formulas using it keep their last values or show #REF!.",
+      "dismiss": "Dismiss",
       "circular_message": "\"{{names}}\" also reads this workbook, so it isn't updated automatically while this one is open.",
       "update_once": "Update once",
       "title": "Backend documents",

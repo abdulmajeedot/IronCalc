@@ -26,6 +26,7 @@ export type {
 export { MenuItem, MenuItemWithSubmenu } from "./components/Menu/MenuItem";
 export type { ConfirmProperties } from "./components/Modal/Confirm";
 export { Confirm } from "./components/Modal/Confirm";
+export { DialogShell } from "./components/RightDrawer/PivotTable/PivotMenus";
 export type { SwitchProperties } from "./components/Switch/Switch";
 export { Switch } from "./components/Switch/Switch";
 export type {

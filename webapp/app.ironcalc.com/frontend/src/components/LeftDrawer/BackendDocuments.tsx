@@ -1,11 +1,13 @@
 import { Button, Confirm, IconButton, Input } from "@ironcalc/workbook";
-import { Trash2 } from "lucide-react";
+import { Link2, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   type BackendDocument,
   clearToken,
+  type DocumentSnapshot,
   deleteDocument,
+  getSelectedDocumentId,
   getToken,
   InvalidTokenError,
   isSelectedOnBackend,
@@ -13,21 +15,33 @@ import {
   listDocuments,
   setToken,
 } from "../documents";
+import ReferenceDialog from "./ReferenceDialog";
 
 const REFRESH_MS = 30_000;
 
 interface BackendDocumentsProps {
   onOpen: (document: BackendDocument) => Promise<void>;
   onUpload: () => Promise<void>;
+  onInsertReference: (
+    document: BackendDocument,
+    snapshot: DocumentSnapshot,
+    sheet: string,
+    range: string,
+  ) => string | null;
 }
 
-function BackendDocuments({ onOpen, onUpload }: BackendDocumentsProps) {
+function BackendDocuments({
+  onOpen,
+  onUpload,
+  onInsertReference,
+}: BackendDocumentsProps) {
   const { t } = useTranslation();
   const [connected, setConnected] = useState(() => getToken() !== null);
   const [tokenInput, setTokenInput] = useState("");
   const [documents, setDocuments] = useState<BackendDocument[]>([]);
   const [error, setError] = useState("");
   const [toDelete, setToDelete] = useState<BackendDocument | null>(null);
+  const [referenceTo, setReferenceTo] = useState<BackendDocument | null>(null);
 
   const report = useCallback(
     (e: unknown) => {
@@ -127,6 +141,14 @@ function BackendDocuments({ onOpen, onUpload }: BackendDocumentsProps) {
               >
                 {document.name}
               </button>
+              {document.id === getSelectedDocumentId() ? null : (
+                <IconButton
+                  icon={<Link2 />}
+                  aria-label={t("left_drawer.backend.reference")}
+                  title={t("left_drawer.backend.reference")}
+                  onClick={() => setReferenceTo(document)}
+                />
+              )}
               <IconButton
                 icon={<Trash2 />}
                 aria-label={t("left_drawer.backend.delete")}
@@ -161,6 +183,25 @@ function BackendDocuments({ onOpen, onUpload }: BackendDocumentsProps) {
           {t("left_drawer.backend.disconnect")}
         </Button>
       </div>
+      {referenceTo ? (
+        <ReferenceDialog
+          document={referenceTo}
+          onClose={() => setReferenceTo(null)}
+          onInsert={(snapshot, sheet, range) => {
+            const failure = onInsertReference(
+              referenceTo,
+              snapshot,
+              sheet,
+              range,
+            );
+            if (failure) {
+              return t(`left_drawer.backend.reference_${failure}`);
+            }
+            setReferenceTo(null);
+            return null;
+          }}
+        />
+      ) : null}
       <Confirm
         open={toDelete !== null}
         onClose={() => setToDelete(null)}

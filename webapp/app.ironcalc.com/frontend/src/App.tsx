@@ -17,6 +17,7 @@ import { WorkbookTabs } from "./components/AISidebar/WorkbookTabs";
 import {
   type BackendDocument,
   type DocumentConflict,
+  type DocumentSnapshot,
   markSelectedDirty,
   openDocument,
   sendEdits,
@@ -26,6 +27,7 @@ import {
 import { FileBar } from "./components/FileBar";
 import LeftDrawer from "./components/LeftDrawer/LeftDrawer";
 import {
+  insertReference,
   type LinkRefresh,
   refreshLinkedWorkbooks,
 } from "./components/linkedWorkbooks";
@@ -78,6 +80,8 @@ function App() {
   // a copy is saved. Every handler that opens another workbook must reset it.
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [circularLinks, setCircularLinks] = useState<string[]>([]);
+  const [missingLinks, setMissingLinks] = useState<string[]>([]);
+  const [dismissedMissingLinks, setDismissedMissingLinks] = useState("");
   const updateLinksOnce = useRef<() => void>(() => {});
   const [documentConflict, setDocumentConflict] =
     useState<DocumentConflict | null>(null);
@@ -236,6 +240,9 @@ function App() {
       return;
     }
     const applyLinkRefresh = (refresh: LinkRefresh) => {
+      setMissingLinks((current) =>
+        current.join() === refresh.missing.join() ? current : refresh.missing,
+      );
       setCircularLinks((current) =>
         current.join() === refresh.circular.join() ? current : refresh.circular,
       );
@@ -333,6 +340,21 @@ function App() {
     await uploadSelected(model);
   };
 
+  const handleInsertReference = (
+    document: BackendDocument,
+    snapshot: DocumentSnapshot,
+    sheet: string,
+    range: string,
+  ): string | null => {
+    try {
+      const failure = insertReference(model, document, snapshot, sheet, range);
+      ironCalcRef.current?.workbook?.refresh();
+      return failure;
+    } catch {
+      return "failed";
+    }
+  };
+
   const handleUseBackendVersion = async (conflict: DocumentConflict) => {
     const replaced = await takeBackendVersion(conflict.uuid);
     if (replaced) {
@@ -382,6 +404,7 @@ function App() {
         onDelete={handleDeleteModelByUuid}
         onOpenDocument={handleOpenDocument}
         onUploadDocument={handleUploadDocument}
+        onInsertReference={handleInsertReference}
       />
       <Confirm
         open={documentConflict !== null}
@@ -436,6 +459,16 @@ function App() {
           isAISidebarOpen={isAISidebarOpen}
           onToggleAISidebar={() => setIsAISidebarOpen(!isAISidebarOpen)}
         />
+        {missingLinks.length > 0 &&
+          missingLinks.join() !== dismissedMissingLinks && (
+            <NoticeBar
+              message={t("left_drawer.backend.missing_message", {
+                names: missingLinks.join(", "),
+              })}
+              actionLabel={t("left_drawer.backend.dismiss")}
+              onAction={() => setDismissedMissingLinks(missingLinks.join())}
+            />
+          )}
         {circularLinks.length > 0 && (
           <NoticeBar
             message={t("left_drawer.backend.circular_message", {

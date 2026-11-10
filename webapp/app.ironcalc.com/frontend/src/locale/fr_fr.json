@@ -1,4 +1,10 @@
 {
+  "common": {
+    "cancel": "Annuler"
+  },
+  "right_drawer": {
+    "close": "Fermer"
+  },
   "app": {
     "title": "IronCalc"
   },
@@ -53,6 +59,17 @@
   },
   "left_drawer": {
     "backend": {
+      "reference": "Insérer une référence à ce classeur",
+      "reference_title": "Référence à {{name}}",
+      "reference_insert": "Insérer",
+      "reference_sheet": "Feuille",
+      "reference_range": "Cellules",
+      "reference_hint": "Cliquez sur une cellule, ou Maj+clic pour une plage. La formule est placée dans la cellule sélectionnée.",
+      "reference_invalid_name": "Le nom de ce document ne peut pas être utilisé dans une formule car il contient [, ] ou '. Renommez-le d'abord.",
+      "reference_name_in_use": "Un autre document portant ce nom est déjà lié dans ce classeur.",
+      "reference_failed": "La référence n'a pas pu être ajoutée à la cellule sélectionnée.",
+      "missing_message": "« {{names}} » est introuvable sur le serveur. Les formules qui l'utilisent gardent leurs dernières valeurs ou affichent #REF!.",
+      "dismiss": "Ignorer",
       "circular_message": "« {{names}} » lit aussi ce classeur : il n'est donc pas mis à jour automatiquement tant que celui-ci est ouvert.",
       "update_once": "Mettre à jour une fois",
       "title": "Documents du serveur",

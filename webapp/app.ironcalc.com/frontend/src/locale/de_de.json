@@ -1,4 +1,10 @@
 {
+  "common": {
+    "cancel": "Abbrechen"
+  },
+  "right_drawer": {
+    "close": "Schließen"
+  },
   "app": {
     "title": "IronCalc"
   },
@@ -53,6 +59,17 @@
   },
   "left_drawer": {
     "backend": {
+      "reference": "Bezug auf diese Arbeitsmappe einfügen",
+      "reference_title": "Bezug auf {{name}}",
+      "reference_insert": "Einfügen",
+      "reference_sheet": "Blatt",
+      "reference_range": "Zellen",
+      "reference_hint": "Klicken Sie auf eine Zelle oder mit Umschalt+Klick auf einen Bereich. Die Formel kommt in die ausgewählte Zelle.",
+      "reference_invalid_name": "Der Name dieses Dokuments kann nicht in einer Formel verwendet werden, weil er [, ] oder ' enthält. Benennen Sie es zuerst um.",
+      "reference_name_in_use": "Ein anderes Dokument mit diesem Namen ist in dieser Arbeitsmappe bereits verknüpft.",
+      "reference_failed": "Der Bezug konnte nicht in die ausgewählte Zelle eingefügt werden.",
+      "missing_message": "„{{names}}“ wurde auf dem Server nicht gefunden. Formeln, die es verwenden, behalten ihre letzten Werte oder zeigen #REF!.",
+      "dismiss": "Schließen",
       "circular_message": "„{{names}}“ liest auch diese Arbeitsmappe und wird daher nicht automatisch aktualisiert, solange diese geöffnet ist.",
       "update_once": "Einmal aktualisieren",
       "title": "Dokumente auf dem Server",

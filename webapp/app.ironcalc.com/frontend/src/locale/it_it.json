@@ -1,4 +1,10 @@
 {
+  "common": {
+    "cancel": "Annulla"
+  },
+  "right_drawer": {
+    "close": "Chiudi"
+  },
   "app": {
     "title": "IronCalc"
   },
@@ -53,6 +59,17 @@
   },
   "left_drawer": {
     "backend": {
+      "reference": "Inserisci un riferimento a questa cartella",
+      "reference_title": "Riferimento a {{name}}",
+      "reference_insert": "Inserisci",
+      "reference_sheet": "Foglio",
+      "reference_range": "Celle",
+      "reference_hint": "Fai clic su una cella, o Maiusc+clic per un intervallo. La formula viene inserita nella cella selezionata.",
+      "reference_invalid_name": "Il nome di questo documento non può essere usato in una formula perché contiene [, ] o '. Rinominalo prima.",
+      "reference_name_in_use": "Un altro documento con questo nome è già collegato in questa cartella.",
+      "reference_failed": "Non è stato possibile aggiungere il riferimento alla cella selezionata.",
+      "missing_message": "\"{{names}}\" non si trova sul server. Le formule che lo usano mantengono gli ultimi valori o mostrano #REF!.",
+      "dismiss": "Ignora",
       "circular_message": "\"{{names}}\" legge anche questa cartella, quindi non viene aggiornato automaticamente finché questa è aperta.",
       "update_once": "Aggiorna una volta",
       "title": "Documenti sul server",
