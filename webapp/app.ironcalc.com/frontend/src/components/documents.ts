@@ -20,6 +20,8 @@ export interface BackendDocument {
   name: string;
   version: number;
   updated_at: number;
+  // The documents this one reads values from
+  sources?: string[];
 }
 
 interface DocumentLink {

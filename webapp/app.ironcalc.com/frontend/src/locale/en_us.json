@@ -53,6 +53,8 @@
   },
   "left_drawer": {
     "backend": {
+      "circular_message": "\"{{names}}\" also reads this workbook, so it isn't updated automatically while this one is open.",
+      "update_once": "Update once",
       "title": "Backend documents",
       "token": "Access token",
       "connect": "Connect",

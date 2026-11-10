@@ -53,6 +53,8 @@
   },
   "left_drawer": {
     "backend": {
+      "circular_message": "\"{{names}}\" también lee este libro, así que no se actualiza automáticamente mientras este esté abierto.",
+      "update_once": "Actualizar una vez",
       "title": "Documentos del servidor",
       "token": "Token de acceso",
       "connect": "Conectar",

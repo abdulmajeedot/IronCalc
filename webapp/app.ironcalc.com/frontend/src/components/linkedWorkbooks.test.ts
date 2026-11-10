@@ -9,7 +9,7 @@ const documents = vi.hoisted(() => ({
 vi.mock("./documents", () => documents);
 
 import type { Model } from "@ironcalc/workbook";
-import { refreshLinkedWorkbooks } from "./linkedWorkbooks";
+import { readsBack, refreshLinkedWorkbooks } from "./linkedWorkbooks";
 
 type ExternalBook = ReturnType<Model["getExternalBooks"]>[number];
 
@@ -98,14 +98,6 @@ describe("refreshLinkedWorkbooks", () => {
     expect(result.missing).toEqual(["Sales"]);
   });
 
-  it("only looks up new names when asked to", async () => {
-    const { model } = fakeModel([
-      { name: "Sales", document_id: "doc-sales", version: 1 },
-    ]);
-    await refreshLinkedWorkbooks(model, true);
-    expect(documents.listDocuments).not.toHaveBeenCalled();
-  });
-
   it("doesn't keep asking for a name nothing has", async () => {
     documents.listDocuments.mockResolvedValue([]);
     const name = freshName();
@@ -123,6 +115,33 @@ describe("refreshLinkedWorkbooks", () => {
     expect(setLinkedWorkbook).toHaveBeenCalledOnce();
   });
 
+  it("updates while open when the source has a new version", async () => {
+    const { model, setLinkedWorkbook } = fakeModel([
+      { name: "Sales", document_id: "doc-sales", version: 2 },
+    ]);
+    const result = await refreshLinkedWorkbooks(model, true);
+    expect(result.changed).toBe(true);
+    expect(setLinkedWorkbook).toHaveBeenCalledOnce();
+  });
+
+  it("stops updating while open when two workbooks read each other", async () => {
+    documents.getSelectedDocumentId.mockReturnValue("doc-report");
+    documents.listDocuments.mockResolvedValue([
+      { ...sales, version: 9, sources: ["doc-report"] },
+      { ...sales, id: "doc-report", name: "Report", sources: ["doc-sales"] },
+    ]);
+    const { model, setLinkedWorkbook } = fakeModel([
+      { name: "Sales", document_id: "doc-sales", version: 3 },
+    ]);
+    const live = await refreshLinkedWorkbooks(model, true);
+    expect(live.circular).toEqual(["Sales"]);
+    expect(setLinkedWorkbook).not.toHaveBeenCalled();
+
+    const onOpening = await refreshLinkedWorkbooks(model, false);
+    expect(onOpening.circular).toEqual([]);
+    expect(setLinkedWorkbook).toHaveBeenCalledOnce();
+  });
+
   it("does nothing without a token", async () => {
     documents.getToken.mockReturnValue(null);
     const { model } = fakeModel([
@@ -130,5 +149,34 @@ describe("refreshLinkedWorkbooks", () => {
     ]);
     await refreshLinkedWorkbooks(model, false);
     expect(documents.listDocuments).not.toHaveBeenCalled();
+  });
+});
+
+describe("readsBack", () => {
+  const doc = (id: string, sources: string[]) => ({
+    id,
+    name: id,
+    version: 1,
+    updated_at: 0,
+    sources,
+  });
+
+  it("follows a chain of documents", () => {
+    const docs = [doc("a", ["b"]), doc("b", ["c"]), doc("c", ["self"])];
+    expect(readsBack(docs, "a", "self")).toBe(true);
+  });
+
+  it("is false when nothing reads the workbook", () => {
+    const docs = [doc("a", ["b"]), doc("b", [])];
+    expect(readsBack(docs, "a", "self")).toBe(false);
+  });
+
+  it("copes with loops that don't include the workbook", () => {
+    const docs = [doc("a", ["b"]), doc("b", ["a"])];
+    expect(readsBack(docs, "a", "self")).toBe(false);
+  });
+
+  it("is false for a workbook that isn't on the backend", () => {
+    expect(readsBack([doc("a", ["a"])], "a", null)).toBe(false);
   });
 });

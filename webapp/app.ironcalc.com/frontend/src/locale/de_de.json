@@ -53,6 +53,8 @@
   },
   "left_drawer": {
     "backend": {
+      "circular_message": "„{{names}}“ liest auch diese Arbeitsmappe und wird daher nicht automatisch aktualisiert, solange diese geöffnet ist.",
+      "update_once": "Einmal aktualisieren",
       "title": "Dokumente auf dem Server",
       "token": "Zugriffstoken",
       "connect": "Verbinden",

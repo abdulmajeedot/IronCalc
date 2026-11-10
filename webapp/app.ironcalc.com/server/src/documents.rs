@@ -3,6 +3,7 @@
 //! The server links the engine, so it checks what it is given is a workbook
 //! and can read calculated values out of one.
 
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs, io, path::PathBuf};
 
@@ -19,6 +20,7 @@ use rocket::request::{FromRequest, Outcome, Request};
 use rocket::serde::json::{serde_json::json, Json, Value};
 use rocket::serde::{Deserialize, Serialize};
 use rocket::{Build, Rocket};
+use rocket_db_pools::sqlx::Acquire;
 use rocket_db_pools::{sqlx, Connection, Database};
 
 use crate::database::IronCalcDB;
@@ -106,6 +108,9 @@ pub struct DocumentInfo {
     pub name: String,
     pub version: i64,
     pub updated_at: i64,
+    /// The documents this one reads values from.
+    #[serde(default)]
+    pub sources: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -151,8 +156,8 @@ fn internal(error: sqlx::Error) -> Status {
     Status::InternalServerError
 }
 
-/// The bytes of a request, if they are a workbook.
-async fn workbook_bytes(data: Data<'_>) -> Result<Vec<u8>, Status> {
+/// The bytes of a request, if they are a workbook, and the documents it reads.
+async fn workbook_bytes(data: Data<'_>) -> Result<(Vec<u8>, Vec<String>), Status> {
     let bytes = data
         .open(MAX_DOCUMENT_MB.mebibytes())
         .into_bytes()
@@ -162,10 +167,36 @@ async fn workbook_bytes(data: Data<'_>) -> Result<Vec<u8>, Status> {
         return Err(Status::PayloadTooLarge);
     }
     let bytes = bytes.into_inner();
-    if IModel::from_bytes(&bytes, "en").is_err() {
-        return Err(Status::UnprocessableEntity);
+    let model = IModel::from_bytes(&bytes, "en").map_err(|_| Status::UnprocessableEntity)?;
+    let sources = model
+        .workbook
+        .external_links
+        .iter()
+        .filter_map(|link| link.document_id.clone())
+        .collect();
+    drop(model);
+    Ok((bytes, sources))
+}
+
+async fn replace_sources(
+    connection: &mut sqlx::SqliteConnection,
+    id: &str,
+    sources: &[String],
+) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM document_sources WHERE document_id = ?")
+        .bind(id)
+        .execute(&mut *connection)
+        .await?;
+    for source in sources {
+        sqlx::query(
+            "INSERT OR IGNORE INTO document_sources (document_id, source_id) VALUES (?, ?)",
+        )
+        .bind(id)
+        .bind(source)
+        .execute(&mut *connection)
+        .await?;
     }
-    Ok(bytes)
+    Ok(())
 }
 
 #[get("/api/documents")]
@@ -179,9 +210,19 @@ async fn list_documents(
     .fetch_all(&mut **db)
     .await
     .map_err(internal)?;
+    let edges: Vec<(String, String)> =
+        sqlx::query_as("SELECT document_id, source_id FROM document_sources")
+            .fetch_all(&mut **db)
+            .await
+            .map_err(internal)?;
+    let mut sources: HashMap<String, Vec<String>> = HashMap::new();
+    for (document, source) in edges {
+        sources.entry(document).or_default().push(source);
+    }
     Ok(Json(
         rows.into_iter()
             .map(|(id, name, version, updated_at)| DocumentInfo {
+                sources: sources.remove(&id).unwrap_or_default(),
                 id,
                 name,
                 version,
@@ -199,13 +240,15 @@ async fn create_document(
     data: Data<'_>,
 ) -> Result<(Status, Json<DocumentInfo>), Status> {
     let name = clean_name(name)?;
-    let bytes = workbook_bytes(data).await?;
+    let (bytes, sources) = workbook_bytes(data).await?;
     let info = DocumentInfo {
         id: id::new_id(),
         name,
         version: 1,
         updated_at: now(),
+        sources: sources.clone(),
     };
+    let mut transaction = (&mut **db).begin().await.map_err(internal)?;
     sqlx::query(
         "INSERT INTO documents (id, name, version, bytes, created_at, updated_at) VALUES (?, ?, 1, ?, ?, ?)",
     )
@@ -214,9 +257,13 @@ async fn create_document(
     .bind(&bytes)
     .bind(info.updated_at)
     .bind(info.updated_at)
-    .execute(&mut **db)
+    .execute(&mut *transaction)
     .await
     .map_err(internal)?;
+    replace_sources(&mut transaction, &info.id, &sources)
+        .await
+        .map_err(internal)?;
+    transaction.commit().await.map_err(internal)?;
     Ok((Status::Created, Json(info)))
 }
 
@@ -254,9 +301,10 @@ async fn save_document(
         .map(clean_name)
         .transpose()
         .map_err(|status| (status, None))?;
-    let bytes = workbook_bytes(data)
+    let (bytes, sources) = workbook_bytes(data)
         .await
         .map_err(|status| (status, None))?;
+    let mut transaction = (&mut **db).begin().await.map_err(|e| (internal(e), None))?;
     let result = sqlx::query(
         "UPDATE documents SET bytes = ?, version = version + 1, updated_at = ?, name = COALESCE(?, name) WHERE id = ? AND version = ?",
     )
@@ -265,14 +313,22 @@ async fn save_document(
     .bind(name)
     .bind(id)
     .bind(version)
-    .execute(&mut **db)
+    .execute(&mut *transaction)
     .await
     .map_err(|e| (internal(e), None))?;
     if result.rows_affected() == 1 {
+        replace_sources(&mut transaction, id, &sources)
+            .await
+            .map_err(|e| (internal(e), None))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|e| (internal(e), None))?;
         return Ok(Json(Saved {
             version: version + 1,
         }));
     }
+    drop(transaction);
     let current: Option<(i64,)> = sqlx::query_as("SELECT version FROM documents WHERE id = ?")
         .bind(id)
         .fetch_optional(&mut **db)
@@ -313,6 +369,11 @@ async fn delete_document(
     mut db: Connection<IronCalcDB>,
     id: &str,
 ) -> Result<Status, Status> {
+    sqlx::query("DELETE FROM document_sources WHERE document_id = ?")
+        .bind(id)
+        .execute(&mut **db)
+        .await
+        .map_err(internal)?;
     let result = sqlx::query("DELETE FROM documents WHERE id = ?")
         .bind(id)
         .execute(&mut **db)
@@ -446,6 +507,20 @@ async fn create_table(rocket: Rocket<Build>) -> fairing::Result {
     )
     .execute(&**pool)
     .await;
+    let created = match created {
+        Ok(_) => {
+            sqlx::query(
+                "CREATE TABLE IF NOT EXISTS document_sources (
+                    document_id TEXT NOT NULL,
+                    source_id TEXT NOT NULL,
+                    PRIMARY KEY (document_id, source_id)
+                )",
+            )
+            .execute(&**pool)
+            .await
+        }
+        error => error,
+    };
     match created {
         Ok(_) => Ok(rocket),
         Err(error) => {
@@ -657,6 +732,53 @@ mod tests {
         let gone = client.get(path).header(bearer()).dispatch().await;
         assert_eq!(gone.status(), Status::NotFound);
         assert_eq!(save(&client, &doc.id, 1).await.status(), Status::NotFound);
+    }
+
+    #[rocket::async_test]
+    async fn the_list_says_which_documents_a_document_reads() {
+        let client = client("sources").await;
+        let source = create(&client, "Source").await;
+        let mut reader = IModel::new_empty("reader", "en", "UTC", "en").unwrap();
+        reader
+            .set_linked_workbook("Source", &source.id, 1, Vec::new())
+            .unwrap();
+        let response = client
+            .post("/api/documents?name=Reader")
+            .header(bearer())
+            .body(reader.to_bytes())
+            .dispatch()
+            .await;
+        let created: DocumentInfo = response.into_json().await.unwrap();
+        assert_eq!(created.sources, vec![source.id.clone()]);
+
+        let list = client
+            .get("/api/documents")
+            .header(bearer())
+            .dispatch()
+            .await;
+        let list = list.into_json::<Vec<DocumentInfo>>().await.unwrap();
+        let entry = list.iter().find(|d| d.id == created.id).unwrap();
+        assert_eq!(entry.sources, vec![source.id.clone()]);
+        assert!(list
+            .iter()
+            .find(|d| d.id == source.id)
+            .unwrap()
+            .sources
+            .is_empty());
+
+        assert_eq!(save(&client, &created.id, 1).await.status(), Status::Ok);
+        let list = client
+            .get("/api/documents")
+            .header(bearer())
+            .dispatch()
+            .await;
+        let list = list.into_json::<Vec<DocumentInfo>>().await.unwrap();
+        assert!(list
+            .iter()
+            .find(|d| d.id == created.id)
+            .unwrap()
+            .sources
+            .is_empty());
     }
 
     #[rocket::async_test]

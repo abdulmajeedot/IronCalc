@@ -53,6 +53,8 @@
   },
   "left_drawer": {
     "backend": {
+      "circular_message": "\"{{names}}\" legge anche questa cartella, quindi non viene aggiornato automaticamente finché questa è aperta.",
+      "update_once": "Aggiorna una volta",
       "title": "Documenti sul server",
       "token": "Token di accesso",
       "connect": "Connetti",

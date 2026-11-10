@@ -77,6 +77,8 @@ function App() {
   // A workbook opened from a link (?model= or ?example=) stays read-only until
   // a copy is saved. Every handler that opens another workbook must reset it.
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [circularLinks, setCircularLinks] = useState<string[]>([]);
+  const updateLinksOnce = useRef<() => void>(() => {});
   const [documentConflict, setDocumentConflict] =
     useState<DocumentConflict | null>(null);
   // Guards against overlapping autosaves and repeated error alerts.
@@ -234,6 +236,9 @@ function App() {
       return;
     }
     const applyLinkRefresh = (refresh: LinkRefresh) => {
+      setCircularLinks((current) =>
+        current.join() === refresh.circular.join() ? current : refresh.circular,
+      );
       if (refresh.changed) {
         markSelectedDirty();
         ironCalcRef.current?.workbook?.refresh();
@@ -241,9 +246,12 @@ function App() {
       }
     };
     // The values of linked workbooks are brought up to date on opening.
-    refreshLinkedWorkbooks(model, false)
-      .then(applyLinkRefresh)
-      .catch(() => {});
+    const updateLinks = (live: boolean) =>
+      refreshLinkedWorkbooks(model, live)
+        .then(applyLinkRefresh)
+        .catch(() => {});
+    updateLinks(false);
+    updateLinksOnce.current = () => updateLinks(false);
     const interval = setInterval(() => {
       sendEdits(model)
         .then((conflict) => {
@@ -252,10 +260,10 @@ function App() {
           }
         })
         .catch(() => {});
-      // A formula just typed may name a workbook not linked yet.
-      refreshLinkedWorkbooks(model, true)
-        .then(applyLinkRefresh)
-        .catch(() => {});
+      // Picks up changed sources and any workbook a formula has just named.
+      if (document.visibilityState === "visible") {
+        updateLinks(true);
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, [model, isReadOnly, reportSaveError]);
@@ -428,6 +436,15 @@ function App() {
           isAISidebarOpen={isAISidebarOpen}
           onToggleAISidebar={() => setIsAISidebarOpen(!isAISidebarOpen)}
         />
+        {circularLinks.length > 0 && (
+          <NoticeBar
+            message={t("left_drawer.backend.circular_message", {
+              names: circularLinks.join(", "),
+            })}
+            actionLabel={t("left_drawer.backend.update_once")}
+            onAction={() => updateLinksOnce.current()}
+          />
+        )}
         {isReadOnly && (
           <NoticeBar
             message={t("unsaved_bar.message")}

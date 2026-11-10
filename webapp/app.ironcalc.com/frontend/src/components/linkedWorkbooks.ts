@@ -18,6 +18,32 @@ let refreshing = false;
 export interface LinkRefresh {
   changed: boolean;
   missing: string[];
+  // Linked workbooks that read this one back: not updated while it is open
+  circular: string[];
+}
+
+// Whether a document ends up reading the workbook `selfId`.
+export function readsBack(
+  documents: BackendDocument[],
+  sourceId: string,
+  selfId: string | null,
+): boolean {
+  if (!selfId) {
+    return false;
+  }
+  const seen = new Set<string>();
+  const pending = [sourceId];
+  while (pending.length > 0) {
+    const id = pending.pop() as string;
+    if (id === selfId) {
+      return true;
+    }
+    if (!seen.has(id)) {
+      seen.add(id);
+      pending.push(...(documents.find((d) => d.id === id)?.sources ?? []));
+    }
+  }
+  return false;
 }
 
 function findDocument(
@@ -36,13 +62,15 @@ function findDocument(
   );
 }
 
-// Loads the values of linked documents that changed. With `onlyNew`, just
-// looks for names that haven't been linked yet, for a formula just typed.
+// Loads the values of linked documents that changed. `live` is for checks
+// made while a workbook stays open: names nothing has are looked for less
+// often, and workbooks that read this one back are left alone, or the two
+// would keep changing each other.
 export async function refreshLinkedWorkbooks(
   model: Model,
-  onlyNew: boolean,
+  live: boolean,
 ): Promise<LinkRefresh> {
-  const result: LinkRefresh = { changed: false, missing: [] };
+  const result: LinkRefresh = { changed: false, missing: [], circular: [] };
   if (refreshing || !getToken()) {
     return result;
   }
@@ -51,9 +79,9 @@ export async function refreshLinkedWorkbooks(
     .getExternalBooks()
     .filter(
       (book) =>
-        !onlyNew ||
-        (!book.document_id &&
-          now - (lastLookedFor.get(book.name) ?? 0) >= RETRY_MISSING_MS),
+        !live ||
+        Boolean(book.document_id) ||
+        now - (lastLookedFor.get(book.name) ?? 0) >= RETRY_MISSING_MS,
     );
   if (books.length === 0) {
     return result;
@@ -75,6 +103,14 @@ export async function refreshLinkedWorkbooks(
         continue;
       }
       lastLookedFor.delete(book.name);
+      if (
+        live &&
+        book.document_id &&
+        readsBack(documents, document.id, selfId)
+      ) {
+        result.circular.push(book.name);
+        continue;
+      }
       if (book.version === document.version) {
         continue;
       }

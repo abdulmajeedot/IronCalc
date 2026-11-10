@@ -53,6 +53,8 @@
   },
   "left_drawer": {
     "backend": {
+      "circular_message": "« {{names}} » lit aussi ce classeur : il n'est donc pas mis à jour automatiquement tant que celui-ci est ouvert.",
+      "update_once": "Mettre à jour une fois",
       "title": "Documents du serveur",
       "token": "Jeton d'accès",
       "connect": "Connecter",
