@@ -150,14 +150,18 @@ pub(crate) fn get_workbook_xml(
     let defined_names = defined_names_str.join("") + &extras.defined_names_xml();
     let pivot_caches = super::pivot::pivot_caches_xml(workbook, pivots);
     let ext_lst = extras.workbook_ext_xml(workbook, pivots);
+    let workbook_properties = super::preserved::workbook_properties_xml(workbook);
+    let external_references = super::preserved::external_references_xml(workbook);
     format!("{XML_DECLARATION}\n\
     <workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\
+    {workbook_properties}\
     <bookViews>
     <workbookView activeTab=\"{selected_sheet}\"/>\
     </bookViews>
       <sheets>\
         {sheets}\
       </sheets>\
+      {external_references}\
       <definedNames>\
         {defined_names}\
       </definedNames>\

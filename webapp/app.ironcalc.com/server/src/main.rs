@@ -54,14 +54,23 @@ async fn download(data: Data<'_>) -> io::Result<FileResponder> {
         writer.flush()?;
     }
 
-    let content_type = ContentType::new(
-        "application",
-        "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    );
+    // A file with macros is not valid under any other name than .xlsm
+    let has_macros = model.workbook.macros.is_some();
+    let content_type = if has_macros {
+        ContentType::new("application", "vnd.ms-excel.sheet.macroenabled.12")
+    } else {
+        ContentType::new(
+            "application",
+            "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    };
 
     let disposition = Header::new(
         "Content-Disposition".to_string(),
-        "attachment; filename=\"data.xlsx\"".to_string(),
+        format!(
+            "attachment; filename=\"data.{}\"",
+            if has_macros { "xlsm" } else { "xlsx" }
+        ),
     );
 
     println!("Download: success. ");
@@ -112,7 +121,7 @@ async fn upload(data: Data<'_>, name: &str) -> io::Result<Vec<u8>> {
             "file was not fully uploaded",
         ));
     }
-    let workbook = load_from_xlsx_bytes(&bytes, name.trim_end_matches(".xlsx"), "en", "UTC")
+    let workbook = load_from_xlsx_bytes(&bytes, name.trim_end_matches(".xlsx").trim_end_matches(".xlsm"), "en", "UTC")
         .map_err(|e| io::Error::other(format!("Error loading model: '{e}'")))?;
     let model = IModel::from_workbook(workbook, "en").map_err(|e| {
         io::Error::other(format!("Error creating model: '{e}'"))

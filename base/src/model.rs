@@ -3583,6 +3583,7 @@ impl<'a> Model<'a> {
         self.workbook
             .worksheets
             .iter()
+            .filter(|worksheet| !crate::preserved::is_external_cache_sheet(worksheet))
             .map(|worksheet| SheetProperties {
                 name: worksheet.get_name(),
                 state: worksheet.state.to_string(),

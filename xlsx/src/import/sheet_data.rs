@@ -16,6 +16,7 @@ use quick_xml::events::{BytesEnd, BytesStart, Event};
 
 use crate::error::XlsxError;
 
+use super::external_links::ExternalBooks;
 use super::shared_strings::SharedStringTable;
 use super::util::parse_bool_with_default;
 use super::worksheets::{
@@ -132,6 +133,7 @@ struct SheetDataReader<'a, 'p> {
     sheet_name: &'a str,
     parser: &'a mut Parser<'p>,
     shared_strings: &'a mut SharedStringTable,
+    external: &'a ExternalBooks,
 
     sheet_data: SheetData,
     rows: Vec<Row>,
@@ -472,7 +474,7 @@ impl SheetDataReader<'_, '_> {
                 // <f ca="1"/>
                 formula_type = "hint-volatile";
             }
-            let formula_text = formula.text.unwrap_or_default();
+            let formula_text = self.external.to_internal(&formula.text.unwrap_or_default());
             let context = format!("{}!{}", self.sheet_name, cell.reference);
             match formula_type {
                 "shared" => {
@@ -622,6 +624,7 @@ pub(super) fn read_sheet_data<R: BufRead>(
     sheet_name: &str,
     parser: &mut Parser,
     shared_strings: &mut SharedStringTable,
+    external: &ExternalBooks,
 ) -> Result<SheetDataXml, XlsxError> {
     let mut reader = quick_xml::Reader::from_reader(reader);
     let mut tree = XmlTreeBuilder::new();
@@ -631,6 +634,7 @@ pub(super) fn read_sheet_data<R: BufRead>(
         sheet_name,
         parser,
         shared_strings,
+        external,
         sheet_data: SheetData::new(),
         rows: Vec::new(),
         shared_formulas: Vec::new(),

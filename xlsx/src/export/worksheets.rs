@@ -125,8 +125,22 @@ fn get_tooltip_attribute(tooltip: &Option<String>) -> String {
     }
 }
 
-/// `<sheetPr>` with the tab color, or nothing for a sheet without one.
-fn get_sheet_properties(color: &Color) -> String {
+/// `<sheetPr>` with the name macros know the sheet by and its tab color, or
+/// nothing for a sheet with neither.
+fn get_sheet_properties(color: &Color, code_name: Option<&str>) -> String {
+    let tab_color = get_tab_color(color);
+    let code_name = code_name.map_or(String::new(), |name| {
+        format!(" codeName=\"{}\"", escape_xml(name))
+    });
+    match (code_name.is_empty(), tab_color.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => format!("<sheetPr{code_name}/>"),
+        _ => format!("<sheetPr{code_name}>{tab_color}</sheetPr>"),
+    }
+}
+
+/// `<tabColor>`, or nothing for a sheet without one.
+fn get_tab_color(color: &Color) -> String {
     let attributes = match color {
         Color::Rgb(hex) => {
             let hex = hex.trim_start_matches('#');
@@ -141,7 +155,7 @@ fn get_sheet_properties(color: &Color) -> String {
         Color::Theme(theme, _) => format!("theme=\"{theme}\""),
         Color::None => return String::new(),
     };
-    format!("<sheetPr><tabColor {attributes}/></sheetPr>")
+    format!("<tabColor {attributes}/>")
 }
 
 /// How many relationships a worksheet has before those of its tables and slicers.
@@ -223,6 +237,7 @@ fn get_array_formula_attribute(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn get_worksheet_xml(
     worksheet: &Worksheet,
+    code_name: Option<&str>,
     parsed_formulas: &[(std::sync::Arc<Node>, StaticResult)],
     dimension: &str,
     is_sheet_selected: bool,
@@ -744,7 +759,7 @@ pub(crate) fn get_worksheet_xml(
         get_conditional_formatting_xml(&worksheet.conditional_formatting);
 
     let hyperlinks_section = get_hyperlinks_section(worksheet);
-    let sheet_properties = get_sheet_properties(&worksheet.color);
+    let sheet_properties = get_sheet_properties(&worksheet.color, code_name);
     let ext_lst = match (cf_ext_lst.strip_suffix("</extLst>"), extra_ext.is_empty()) {
         (_, true) => cf_ext_lst.clone(),
         (Some(open), false) => format!("{open}{extra_ext}</extLst>"),

@@ -84,10 +84,28 @@ pub(super) fn load_workbook<R: Read + std::io::Seek>(
         .and_then(|n| n.attribute("activeTab"))
         .and_then(|tab| tab.parse::<usize>().ok())
         .unwrap_or(0);
+    let external_references = doc
+        .descendants()
+        .filter(|n| n.has_tag_name("externalReference"))
+        .filter_map(|n| {
+            n.attribute_ns(
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+                "id",
+            )
+        })
+        .map(str::to_string)
+        .collect();
+    let code_name = doc
+        .descendants()
+        .find(|n| n.has_tag_name("workbookPr"))
+        .and_then(|n| n.attribute("codeName"))
+        .map(str::to_string);
     // read the relationships file
     Ok(WorkbookXML {
         worksheets: sheets,
         defined_names,
         active_tab,
+        external_references,
+        code_name,
     })
 }

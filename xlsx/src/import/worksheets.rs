@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
+use super::external_links::ExternalBooks;
 use super::protection::{load_sheet_protection, XfProtection};
 use ironcalc_base::expressions::parser::{
     new_parser_english, static_analysis::add_implicit_intersection, Parser,
@@ -53,6 +54,8 @@ pub(crate) struct WorkbookXML {
     pub(crate) defined_names: Vec<DefinedName>,
     /// Index into `worksheets` of the sheet on screen when the file was saved
     pub(crate) active_tab: usize,
+    pub(super) external_references: Vec<String>,
+    pub(super) code_name: Option<String>,
 }
 
 pub(crate) struct Relationship {
@@ -1015,6 +1018,8 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
     sheet_filters: &mut Vec<LoadedSheetFilter>,
     sheet_protections: &mut Vec<SheetProtection>,
     xf_protection: &XfProtection,
+    external: &ExternalBooks,
+    sheet_code_names: &mut Vec<(u32, String)>,
 ) -> Result<Worksheet, XlsxError> {
     let sheet_name = &settings.name;
     let sheet_id = settings.id;
@@ -1036,8 +1041,16 @@ pub(super) fn load_sheet<R: Read + std::io::Seek>(
         sheet_name,
         &mut parser,
         shared_strings,
+        external,
     )?;
     let ws = &worksheet;
+
+    if let Some(code_name) = ws
+        .child("sheetPr")
+        .and_then(|node| node.attribute("codeName"))
+    {
+        sheet_code_names.push((sheet_id, code_name.to_string()));
+    }
 
     let dimension = load_dimension(ws);
 
@@ -1118,6 +1131,8 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
     sheet_filters: &mut Vec<LoadedSheetFilter>,
     sheet_protections: &mut Vec<SheetProtection>,
     xf_protection: &XfProtection,
+    external: &ExternalBooks,
+    sheet_code_names: &mut Vec<(u32, String)>,
 ) -> Result<Vec<Worksheet>, XlsxError> {
     // load comments, tables and hyperlink relationships
     let mut sheet_rels = HashMap::new();
@@ -1138,7 +1153,10 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
     }
 
     // load all sheets
-    let worksheets: &Vec<String> = &workbook.worksheets.iter().map(|s| s.name.clone()).collect();
+    let mut worksheet_names: Vec<String> =
+        workbook.worksheets.iter().map(|s| s.name.clone()).collect();
+    worksheet_names.extend(external.sheet_names());
+    let worksheets: &Vec<String> = &worksheet_names;
     let mut sheets = Vec::new();
 
     let defined_names = workbook.get_defined_names_with_scope();
@@ -1180,6 +1198,8 @@ pub(super) fn load_sheets<R: Read + std::io::Seek>(
                 sheet_filters,
                 sheet_protections,
                 xf_protection,
+                external,
+                sheet_code_names,
             )?;
             sheets.push(s);
         }

@@ -1,5 +1,6 @@
 mod conditional_formatting;
 mod data_validation;
+mod external_links;
 mod metadata;
 mod pivot;
 mod protection;
@@ -113,6 +114,25 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
     let mut sheet_views = Vec::new();
     let mut data_validations = Vec::new();
     let mut sheet_filter_list = Vec::new();
+    let first_cache_id = workbook
+        .worksheets
+        .iter()
+        .map(|sheet| sheet.sheet_id)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let external = external_links::load_external_links(
+        &mut archive,
+        &rels,
+        &workbook.external_references,
+        first_cache_id,
+        &mut shared_strings,
+    )?;
+    for defined_name in &mut workbook.defined_names {
+        defined_name.formula = external.to_internal(&defined_name.formula);
+    }
+    let mut macros = external_links::load_macros(&mut archive, &rels, workbook.code_name.clone())?;
+    let mut sheet_code_names = Vec::new();
     let mut sheet_protections = Vec::new();
     let xf_protection = protection::load_xf_protection(&mut archive)?;
     let worksheets = load_sheets(
@@ -128,7 +148,15 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         &mut sheet_filter_list,
         &mut sheet_protections,
         &xf_protection,
+        &external,
+        &mut sheet_code_names,
     )?;
+    let mut worksheets = worksheets;
+    let external_links_list = external.links;
+    worksheets.extend(external.sheets);
+    if let Some(macros) = &mut macros {
+        macros.sheet_code_names = sheet_code_names;
+    }
     // `activeTab` counts chart sheets too, which are not loaded.
     let active_sheet_id = workbook
         .worksheets
@@ -196,6 +224,8 @@ fn load_xlsx_from_reader<R: Read + std::io::Seek>(
         data_validations,
         sheet_filters,
         sheet_protections,
+        external_links: external_links_list,
+        macros,
     };
     pivot::paint_imported_pivots(&mut workbook);
     Ok(workbook)

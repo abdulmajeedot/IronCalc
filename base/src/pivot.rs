@@ -799,6 +799,8 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
         && workbook.data_validations.is_empty()
         && workbook.sheet_filters.is_empty()
         && workbook.sheet_protections.is_empty()
+        && workbook.external_links.is_empty()
+        && workbook.macros.is_none()
         && *view == SavedView::default()
     {
         return body;
@@ -819,6 +821,8 @@ pub fn workbook_to_bytes_with_view(workbook: &Workbook, view: &SavedView) -> Vec
         data_validations: workbook.data_validations.clone(),
         sheet_filters: workbook.sheet_filters.clone(),
         sheet_protections: workbook.sheet_protections.clone(),
+        external_links: workbook.external_links.clone(),
+        macros: workbook.macros.clone(),
     })
     .unwrap_or_default();
     let mut bytes =
@@ -846,6 +850,10 @@ struct SavedExtras {
     sheet_filters: Vec<crate::table::SheetFilter>,
     #[serde(default)]
     sheet_protections: Vec<crate::protection::SheetProtection>,
+    #[serde(default)]
+    external_links: Vec<crate::preserved::ExternalLink>,
+    #[serde(default)]
+    macros: Option<crate::preserved::MacroProject>,
 }
 
 fn restore_pivots(workbook: &mut Workbook, pivots: &[u8]) -> Result<(), String> {
@@ -890,6 +898,8 @@ pub fn workbook_from_bytes(bytes: &[u8]) -> Result<Workbook, String> {
         workbook.data_validations = extras.data_validations;
         workbook.sheet_filters = extras.sheet_filters;
         workbook.sheet_protections = extras.sheet_protections;
+        workbook.external_links = extras.external_links;
+        workbook.macros = extras.macros;
         return Ok(workbook);
     }
     let Some(rest) = bytes.strip_prefix(PIVOT_MAGIC) else {

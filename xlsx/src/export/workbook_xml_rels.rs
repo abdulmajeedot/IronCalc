@@ -32,6 +32,7 @@ pub(crate) fn get_workbook_xml_rels(
     );
     relationships_str.extend(super::pivot::pivot_workbook_rels(workbook, pivots));
     relationships_str.extend(extras.workbook_rels(workbook, pivots));
+    relationships_str.extend(super::preserved::workbook_rels(workbook));
     format!(
         "{XML_DECLARATION}\n<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">{}</Relationships>",
         relationships_str.join("")

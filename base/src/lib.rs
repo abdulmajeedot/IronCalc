@@ -40,6 +40,7 @@ pub mod locale;
 pub mod new_empty;
 pub mod number_format;
 pub mod pivot;
+pub mod preserved;
 pub mod protection;
 pub mod sheet_data;
 pub mod table;

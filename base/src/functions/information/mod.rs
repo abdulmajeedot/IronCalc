@@ -403,7 +403,7 @@ impl<'a> Model<'a> {
                 message: "Sheets function with an argument is not implemented".to_string(),
             };
         }
-        let sheet_count = self.workbook.worksheets.len() as f64;
+        let sheet_count = self.external_cache_start() as f64;
         CalcResult::Number(sheet_count)
     }
 
@@ -519,7 +519,7 @@ impl<'a> Model<'a> {
             },
 
             // For now we just show the count of sheets in the current workbook
-            "NUMFILE" => CalcResult::Number(self.workbook.worksheets.len() as f64),
+            "NUMFILE" => CalcResult::Number(self.external_cache_start() as f64),
 
             // At the moment we always do automatic recalc
             "RECALC" => CalcResult::String("Automatic".to_string()),

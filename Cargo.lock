@@ -459,6 +459,7 @@ dependencies = [
 name = "ironcalc"
 version = "0.9.1"
 dependencies = [
+ "base64",
  "bitcode",
  "chrono",
  "ironcalc",

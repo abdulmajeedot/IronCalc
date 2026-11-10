@@ -79,7 +79,11 @@ export async function downloadModel(bytes: Uint8Array, fileName: string) {
   a.style.display = "none";
   a.href = url;
 
-  a.download = `${sanitizedFileName}.xlsx`;
+  // A file with macros is only valid as .xlsm
+  const hasMacros = response.headers
+    .get("Content-Disposition")
+    ?.includes(".xlsm");
+  a.download = `${sanitizedFileName}.${hasMacros ? "xlsm" : "xlsx"}`;
   document.body.appendChild(a);
   a.click();
 

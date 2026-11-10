@@ -8,6 +8,7 @@ mod doc_props;
 mod dxfs_styles;
 mod escape;
 mod pivot;
+mod preserved;
 mod protection;
 mod shared_strings;
 mod styles;
@@ -46,7 +47,10 @@ fn get_content_types_xml(
         r#"<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">"#.to_string(),
         r#"<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>"#.to_string(),
         r#"<Default Extension="xml" ContentType="application/xml"/>"#.to_string(),
-        r#"<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>"#.to_string(),
+        format!(
+            r#"<Override PartName="/xl/workbook.xml" ContentType="{}"/>"#,
+            preserved::workbook_content_type(workbook)
+        ),
     ];
     for worksheet in 0..workbook.worksheets.len() {
         let sheet = format!(
@@ -59,6 +63,7 @@ fn get_content_types_xml(
         content.extend(exported.content_types());
     }
     content.extend(extras.content_types.iter().cloned());
+    content.extend(preserved::content_types(workbook));
     content.push(
         r#"<Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>"#.to_string(),
     );
@@ -96,10 +101,12 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
     view: &SavedView,
     writer: W,
 ) -> Result<W, XlsxError> {
-    let protected = protection::with_cell_protection(&model.workbook);
+    let without_cache = preserved::without_cache_sheets(&model.workbook);
+    let visible_workbook = without_cache.as_ref().unwrap_or(&model.workbook);
+    let protected = protection::with_cell_protection(visible_workbook);
     let workbook = protected
         .as_ref()
-        .map_or(&model.workbook, |protected| &protected.workbook);
+        .map_or(visible_workbook, |protected| &protected.workbook);
     let no_formats = std::collections::HashMap::new();
     let protected_formats = protected
         .as_ref()
@@ -145,7 +152,11 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
     zip.write_all(styles::get_styles_xml(workbook, protected_formats).as_bytes())?;
     zip.start_file("xl/workbook.xml", options)?;
     zip.write_all(
-        workbook::get_workbook_xml(workbook, selected_sheet, &pivots, &extras).as_bytes(),
+        preserved::with_book_numbers(
+            workbook::get_workbook_xml(workbook, selected_sheet, &pivots, &extras),
+            workbook,
+        )
+        .as_bytes(),
     )?;
     zip.start_file("xl/metadata.xml", options)?;
     let metadata_xml = include_str!("metadata.xml");
@@ -168,6 +179,11 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
             zip.start_file(path, options)?;
             zip.write_all(contents.as_bytes())?;
         }
+    }
+
+    for (path, contents) in preserved::parts(workbook) {
+        zip.start_file(path, options)?;
+        zip.write_all(&contents)?;
     }
 
     for (path, contents) in &extras.parts {
@@ -220,9 +236,11 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
             .count();
         let rel_base = worksheets::worksheet_rel_base(worksheet, pivot_count);
         let sheet_extras = &extras.sheets[sheet_index];
-        zip.write_all(
+        let code_name = preserved::sheet_code_name(workbook, worksheet.sheet_id);
+        let worksheet_xml = preserved::with_book_numbers(
             worksheets::get_worksheet_xml(
                 worksheet,
+                code_name,
                 &model.parsed_formulas[sheet_index],
                 sheet_dimension_str,
                 is_sheet_selected,
@@ -234,9 +252,10 @@ pub fn save_xlsx_view_to_writer<W: Write + Seek>(
                 &data_validation::get_data_validations_xml(workbook, worksheet),
                 &sheet_extras.parts_xml(rel_base),
                 &sheet_extras.ext_xml(rel_base),
-            )
-            .as_bytes(),
-        )?;
+            ),
+            workbook,
+        );
+        zip.write_all(worksheet_xml.as_bytes())?;
     }
 
     let writer = zip.finish()?;

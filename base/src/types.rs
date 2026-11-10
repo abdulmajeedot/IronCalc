@@ -143,6 +143,13 @@ pub struct Workbook {
     /// the workbook, like the pivots.
     #[bitcode(skip)]
     pub sheet_protections: Vec<crate::protection::SheetProtection>,
+    /// Links to other workbooks, as the file had them. Saved next to the
+    /// workbook, like the pivots.
+    #[bitcode(skip)]
+    pub external_links: Vec<crate::preserved::ExternalLink>,
+    /// The macros of the file, which are kept and never run.
+    #[bitcode(skip)]
+    pub macros: Option<crate::preserved::MacroProject>,
 }
 
 /// The sheet on screen when a workbook was saved, and what each sheet showed.

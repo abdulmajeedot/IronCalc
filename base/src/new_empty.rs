@@ -224,9 +224,10 @@ impl<'a> Model<'a> {
         // Now we need a sheet_id
         let sheet_id = self.get_new_sheet_id();
         let worksheet = Model::new_empty_worksheet(&sheet_name, sheet_id);
-        self.workbook.worksheets.push(worksheet);
+        let index = self.external_cache_start();
+        self.workbook.worksheets.insert(index, worksheet);
         self.reset_parsed_structures();
-        (sheet_name, self.workbook.worksheets.len() as u32 - 1)
+        (sheet_name, index as u32)
     }
 
     /// Inserts a sheet with a particular index
@@ -268,7 +269,7 @@ impl<'a> Model<'a> {
     /// Adds a sheet with a specific name
     /// Fails if a worksheet with that name already exists or the name is invalid
     pub fn add_sheet(&mut self, sheet_name: &str) -> Result<(), String> {
-        self.insert_sheet(sheet_name, self.workbook.worksheets.len() as u32, None)
+        self.insert_sheet(sheet_name, self.external_cache_start() as u32, None)
     }
 
     /// Duplicates an existing sheet, placing the copy immediately after the
@@ -717,6 +718,8 @@ impl<'a> Model<'a> {
             data_validations: vec![],
             sheet_filters: vec![],
             sheet_protections: vec![],
+            external_links: vec![],
+            macros: None,
             slicers: vec![],
         };
         let parsed_formulas = Vec::new();

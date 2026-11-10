@@ -62,7 +62,7 @@ function WelcomeDialog({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel.sheet.macroEnabled.12"
           style={{ display: "none" }}
           onChange={handleFileChange}
         />
