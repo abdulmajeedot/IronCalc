@@ -52,6 +52,25 @@
     "about_ironcalc": "Über IronCalc"
   },
   "left_drawer": {
+    "backend": {
+      "title": "Dokumente auf dem Server",
+      "token": "Zugriffstoken",
+      "connect": "Verbinden",
+      "invalid_token": "Dieses Token wurde nicht akzeptiert.",
+      "unreachable": "Der Server ist derzeit nicht erreichbar.",
+      "empty": "Noch keine Dokumente auf dem Server.",
+      "upload": "Diese Arbeitsmappe auf dem Server speichern",
+      "disconnect": "Trennen",
+      "delete": "Löschen",
+      "delete_title": "Dokument löschen",
+      "delete_message": "„{{name}}“ vom Server löschen? Das kann nicht rückgängig gemacht werden. Kopien auf diesem Gerät bleiben erhalten.",
+      "cancel": "Abbrechen",
+      "paused": "Diese Arbeitsmappe wurde auf dem Server geändert, daher werden Ihre Änderungen nicht gesendet.",
+      "conflict_title": "Auf dem Server geändert",
+      "conflict_message": "Für „{{name}}“ gibt es eine neuere Version auf dem Server. Ihre Kopie ersetzen? Nicht gesendete Änderungen gehen verloren.",
+      "use_backend": "Serverversion verwenden",
+      "keep_local": "Meine Kopie behalten"
+    },
     "new_workbook": "Neue Arbeitsmappe",
     "search_workbook": "Arbeitsmappen durchsuchen",
     "search_placeholder": "Arbeitsmappe suchen...",

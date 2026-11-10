@@ -52,6 +52,25 @@
     "about_ironcalc": "À propos d'IronCalc"
   },
   "left_drawer": {
+    "backend": {
+      "title": "Documents du serveur",
+      "token": "Jeton d'accès",
+      "connect": "Connecter",
+      "invalid_token": "Ce jeton n'a pas été accepté.",
+      "unreachable": "Le serveur est actuellement inaccessible.",
+      "empty": "Aucun document sur le serveur pour le moment.",
+      "upload": "Enregistrer ce classeur sur le serveur",
+      "disconnect": "Déconnecter",
+      "delete": "Supprimer",
+      "delete_title": "Supprimer le document",
+      "delete_message": "Supprimer « {{name}} » du serveur ? Cette action est irréversible. Les copies sur cet appareil sont conservées.",
+      "cancel": "Annuler",
+      "paused": "Ce classeur a changé sur le serveur : vos modifications ne sont pas envoyées.",
+      "conflict_title": "Modifié sur le serveur",
+      "conflict_message": "« {{name}} » a une version plus récente sur le serveur. Remplacer votre copie ? Vos modifications non envoyées seront perdues.",
+      "use_backend": "Utiliser la version du serveur",
+      "keep_local": "Garder ma copie"
+    },
     "new_workbook": "Nouveau classeur",
     "search_workbook": "Rechercher des classeurs",
     "search_placeholder": "Rechercher un classeur...",

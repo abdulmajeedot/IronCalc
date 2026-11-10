@@ -2,6 +2,7 @@ import "./App.css";
 import type { IronCalcHandle } from "@ironcalc/workbook";
 // From IronCalc
 import {
+  Confirm,
   darkThemeVariables,
   IronCalc,
   IronCalcIcon,
@@ -13,6 +14,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AISidebar } from "./components/AISidebar/AISidebar";
 import { WorkbookTabs } from "./components/AISidebar/WorkbookTabs";
+import {
+  type BackendDocument,
+  type DocumentConflict,
+  markSelectedDirty,
+  openDocument,
+  sendEdits,
+  takeBackendVersion,
+  uploadSelected,
+} from "./components/documents";
 import { FileBar } from "./components/FileBar";
 import LeftDrawer from "./components/LeftDrawer/LeftDrawer";
 import { NoticeBar } from "./components/NoticeBar";
@@ -63,6 +73,8 @@ function App() {
   // A workbook opened from a link (?model= or ?example=) stays read-only until
   // a copy is saved. Every handler that opens another workbook must reset it.
   const [isReadOnly, setIsReadOnly] = useState(false);
+  const [documentConflict, setDocumentConflict] =
+    useState<DocumentConflict | null>(null);
   // Guards against overlapping autosaves and repeated error alerts.
   const isSavingRef = useRef(false);
   const saveErrorReportedRef = useRef(false);
@@ -196,6 +208,9 @@ function App() {
       const view = JSON.stringify(model.getSelectedView());
       const viewSettled = view === lastView && view !== savedView;
       lastView = view;
+      if (queue.length !== 1) {
+        markSelectedDirty();
+      }
       if (queue.length !== 1 || viewSettled) {
         savedView = view;
         isSavingRef.current = true;
@@ -208,6 +223,23 @@ function App() {
     }, 1000);
     return () => clearInterval(interval);
   }, [model, reportSaveError]);
+
+  // Sends edits to the backend every few seconds.
+  useEffect(() => {
+    if (!model || isReadOnly) {
+      return;
+    }
+    const interval = setInterval(() => {
+      sendEdits(model)
+        .then((conflict) => {
+          if (conflict) {
+            setDocumentConflict(conflict);
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [model, isReadOnly]);
 
   if (!model) {
     return (
@@ -261,6 +293,26 @@ function App() {
     }
   };
 
+  const handleOpenDocument = async (document: BackendDocument) => {
+    await saveSelectedModelInStorage(model).catch(reportSaveError);
+    const opened = await openDocument(document);
+    if (opened) {
+      showLocalModel(opened);
+    }
+  };
+
+  const handleUploadDocument = async () => {
+    await saveSelectedModelInStorage(model).catch(reportSaveError);
+    await uploadSelected(model);
+  };
+
+  const handleUseBackendVersion = async (conflict: DocumentConflict) => {
+    const replaced = await takeBackendVersion(conflict.uuid);
+    if (replaced) {
+      showLocalModel(replaced);
+    }
+  };
+
   const handleDeleteModel = async () => {
     const newModel = await deleteSelectedModel();
     if (newModel) {
@@ -301,6 +353,26 @@ function App() {
         newModel={handleNewModel}
         setModel={handleSetModel}
         onDelete={handleDeleteModelByUuid}
+        onOpenDocument={handleOpenDocument}
+        onUploadDocument={handleUploadDocument}
+      />
+      <Confirm
+        open={documentConflict !== null}
+        onClose={() => setDocumentConflict(null)}
+        onConfirm={() => {
+          const conflict = documentConflict;
+          setDocumentConflict(null);
+          if (conflict) {
+            handleUseBackendVersion(conflict).catch(reportSaveError);
+          }
+        }}
+        title={t("left_drawer.backend.conflict_title")}
+        message={t("left_drawer.backend.conflict_message", {
+          name: documentConflict?.name ?? "",
+        })}
+        confirmLabel={t("left_drawer.backend.use_backend")}
+        cancelLabel={t("left_drawer.backend.keep_local")}
+        closeLabel={t("left_drawer.backend.keep_local")}
       />
       <div
         className={`app-ic-main-content${isDrawerOpen ? " app-ic-main-content--open" : ""}`}

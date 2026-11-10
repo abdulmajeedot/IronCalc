@@ -1,9 +1,13 @@
+import type { BackendDocument } from "../documents";
+import BackendDocuments from "./BackendDocuments";
 import LocalStorageAlert from "./LocalStorageAlert";
 import WorkbookList from "./WorkbookList";
 
 interface DrawerContentProps {
   setModel: (key: string) => void;
   onDelete: (uuid: string) => void;
+  onOpenDocument: (document: BackendDocument) => Promise<void>;
+  onUploadDocument: () => Promise<void>;
   searchQuery: string;
   checkedUuids: Set<string>;
   onCheckboxClick: (
@@ -16,6 +20,8 @@ interface DrawerContentProps {
 function DrawerContent({
   setModel,
   onDelete,
+  onOpenDocument,
+  onUploadDocument,
   searchQuery,
   checkedUuids,
   onCheckboxClick,
@@ -30,6 +36,7 @@ function DrawerContent({
           checkedUuids={checkedUuids}
           onCheckboxClick={onCheckboxClick}
         />
+        <BackendDocuments onOpen={onOpenDocument} onUpload={onUploadDocument} />
       </div>
       <div
         className={`app-ic-drawer-alert-wrapper${checkedUuids.size > 0 ? " app-ic-drawer-alert-wrapper--selection" : ""}`}

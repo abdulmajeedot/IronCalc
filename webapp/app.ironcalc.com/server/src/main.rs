@@ -2,6 +2,7 @@
 extern crate rocket;
 
 mod database;
+mod documents;
 mod id;
 
 use std::io::{self, BufWriter, Cursor, Write};
@@ -132,8 +133,11 @@ async fn upload(data: Data<'_>, name: &str) -> io::Result<Vec<u8>> {
 
 #[launch]
 fn rocket() -> _ {
+    let token = documents::load_token()
+        .unwrap_or_else(|e| panic!("Could not set up the documents token: {e}"));
     let mut rocket = rocket::build()
         .attach(IronCalcDB::init())
+        .attach(documents::stage(token))
         .mount("/", routes![upload, download, share, get_model, get_model_list]);
 
     if let Ok(frontend_path) = std::env::var("IRONCALC_WEBAPP_DIR") {

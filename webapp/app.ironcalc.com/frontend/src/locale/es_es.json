@@ -52,6 +52,25 @@
     "about_ironcalc": "Acerca de IronCalc"
   },
   "left_drawer": {
+    "backend": {
+      "title": "Documentos del servidor",
+      "token": "Token de acceso",
+      "connect": "Conectar",
+      "invalid_token": "Ese token no se ha aceptado.",
+      "unreachable": "Ahora mismo no se puede acceder al servidor.",
+      "empty": "Aún no hay documentos en el servidor.",
+      "upload": "Guardar este libro en el servidor",
+      "disconnect": "Desconectar",
+      "delete": "Eliminar",
+      "delete_title": "Eliminar documento",
+      "delete_message": "¿Eliminar \"{{name}}\" del servidor? No se puede deshacer. Las copias de este dispositivo se conservan.",
+      "cancel": "Cancelar",
+      "paused": "Este libro cambió en el servidor, así que tus ediciones no se están enviando.",
+      "conflict_title": "Cambios en el servidor",
+      "conflict_message": "\"{{name}}\" tiene una versión más reciente en el servidor. ¿Reemplazar tu copia? Se perderán las ediciones sin enviar.",
+      "use_backend": "Usar la versión del servidor",
+      "keep_local": "Conservar mi copia"
+    },
     "new_workbook": "Nuevo libro",
     "search_workbook": "Buscar libros",
     "search_placeholder": "Buscar libro...",

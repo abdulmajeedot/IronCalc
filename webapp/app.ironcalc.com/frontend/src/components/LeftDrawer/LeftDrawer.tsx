@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { BackendDocument } from "../documents";
 import DrawerContent from "./DrawerContent";
 import DrawerFooter from "./DrawerFooter";
 import DrawerHeader from "./DrawerHeader";
@@ -10,9 +11,18 @@ interface LeftDrawerProps {
   newModel: () => void;
   setModel: (key: string) => void;
   onDelete: (uuid: string) => void;
+  onOpenDocument: (document: BackendDocument) => Promise<void>;
+  onUploadDocument: () => Promise<void>;
 }
 
-function LeftDrawer({ open, newModel, setModel, onDelete }: LeftDrawerProps) {
+function LeftDrawer({
+  open,
+  newModel,
+  setModel,
+  onDelete,
+  onOpenDocument,
+  onUploadDocument,
+}: LeftDrawerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const {
     checkedUuids,
@@ -32,6 +42,8 @@ function LeftDrawer({ open, newModel, setModel, onDelete }: LeftDrawerProps) {
         <DrawerContent
           setModel={setModel}
           onDelete={onDelete}
+          onOpenDocument={onOpenDocument}
+          onUploadDocument={onUploadDocument}
           searchQuery={searchQuery}
           checkedUuids={checkedUuids}
           onCheckboxClick={handleCheckboxClick}

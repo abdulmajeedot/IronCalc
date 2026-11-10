@@ -52,6 +52,25 @@
     "about_ironcalc": "Informazioni su IronCalc"
   },
   "left_drawer": {
+    "backend": {
+      "title": "Documenti sul server",
+      "token": "Token di accesso",
+      "connect": "Connetti",
+      "invalid_token": "Il token non è stato accettato.",
+      "unreachable": "Al momento il server non è raggiungibile.",
+      "empty": "Ancora nessun documento sul server.",
+      "upload": "Salva questa cartella sul server",
+      "disconnect": "Disconnetti",
+      "delete": "Elimina",
+      "delete_title": "Elimina documento",
+      "delete_message": "Eliminare \"{{name}}\" dal server? L'operazione non può essere annullata. Le copie su questo dispositivo vengono mantenute.",
+      "cancel": "Annulla",
+      "paused": "Questa cartella è cambiata sul server, quindi le tue modifiche non vengono inviate.",
+      "conflict_title": "Modificato sul server",
+      "conflict_message": "\"{{name}}\" ha una versione più recente sul server. Sostituire la tua copia? Le modifiche non inviate andranno perse.",
+      "use_backend": "Usa la versione del server",
+      "keep_local": "Mantieni la mia copia"
+    },
     "new_workbook": "Nuova cartella di lavoro",
     "search_workbook": "Cerca cartelle di lavoro",
     "search_placeholder": "Cerca cartella di lavoro...",

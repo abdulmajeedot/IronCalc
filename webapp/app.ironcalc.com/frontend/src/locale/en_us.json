@@ -52,6 +52,25 @@
     "about_ironcalc": "About IronCalc"
   },
   "left_drawer": {
+    "backend": {
+      "title": "Backend documents",
+      "token": "Access token",
+      "connect": "Connect",
+      "invalid_token": "That token wasn't accepted.",
+      "unreachable": "The backend can't be reached right now.",
+      "empty": "No documents on the backend yet.",
+      "upload": "Save this workbook to the backend",
+      "disconnect": "Disconnect",
+      "delete": "Delete",
+      "delete_title": "Delete document",
+      "delete_message": "Delete \"{{name}}\" from the backend? This can't be undone. Copies on this device are kept.",
+      "cancel": "Cancel",
+      "paused": "This workbook changed on the backend, so your edits aren't being sent.",
+      "conflict_title": "Changed on the backend",
+      "conflict_message": "\"{{name}}\" has a newer version on the backend. Replace your copy with it? Your unsent edits will be lost.",
+      "use_backend": "Use backend version",
+      "keep_local": "Keep my copy"
+    },
     "new_workbook": "New workbook",
     "search_workbook": "Search workbooks",
     "search_placeholder": "Search workbook...",
