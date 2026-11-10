@@ -38,7 +38,7 @@ fn is_valid_sheet_name(name: &str) -> bool {
 
 impl<'a> Model<'a> {
     /// Creates a new worksheet. Note that it does not check if the name or the sheet_id exists
-    fn new_empty_worksheet(name: &str, sheet_id: u32) -> Worksheet {
+    pub(crate) fn new_empty_worksheet(name: &str, sheet_id: u32) -> Worksheet {
         Worksheet {
             cols: vec![],
             rows: vec![],

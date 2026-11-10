@@ -8,6 +8,8 @@ use std::{env, fs, io, path::PathBuf};
 
 use ironcalc::base::cell::CellValue;
 use ironcalc::base::expressions::utils::parse_reference_a1;
+use ironcalc::base::preserved::is_external_cache_sheet;
+use ironcalc::base::types::CellType;
 use ironcalc::base::Model as IModel;
 use rand::RngCore;
 use rocket::data::{Data, ToByteUnit};
@@ -387,6 +389,47 @@ async fn document_values(
     Ok(Json(json!({ "version": version, "values": values })))
 }
 
+/// Every filled cell of a document, for the workbooks that link to it.
+#[get("/api/documents/<id>/snapshot")]
+async fn document_snapshot(
+    _authorized: Authorized,
+    mut db: Connection<IronCalcDB>,
+    id: &str,
+) -> Result<Json<Value>, Status> {
+    let row: Option<(Vec<u8>, i64)> =
+        sqlx::query_as("SELECT bytes, version FROM documents WHERE id = ?")
+            .bind(id)
+            .fetch_optional(&mut **db)
+            .await
+            .map_err(internal)?;
+    let (bytes, version) = row.ok_or(Status::NotFound)?;
+    let model = IModel::from_bytes(&bytes, "en").map_err(|_| Status::InternalServerError)?;
+    let mut sheets = Vec::new();
+    for (index, worksheet) in model.workbook.worksheets.iter().enumerate() {
+        if is_external_cache_sheet(worksheet) {
+            continue;
+        }
+        let mut cells = Vec::new();
+        for (row, column, cell) in worksheet.sheet_data.cells() {
+            let value = model
+                .get_cell_value_by_index(index as u32, row, column)
+                .map_err(|_| Status::InternalServerError)?;
+            let is_error = cell.get_type() == CellType::ErrorValue;
+            match value {
+                CellValue::None => {}
+                CellValue::String(text) if is_error => {
+                    cells.push(json!([row, column, { "error": text }]));
+                }
+                CellValue::Number(number) => cells.push(json!([row, column, number])),
+                CellValue::String(text) => cells.push(json!([row, column, text])),
+                CellValue::Boolean(value) => cells.push(json!([row, column, value])),
+            }
+        }
+        sheets.push(json!({ "name": worksheet.name, "cells": cells }));
+    }
+    Ok(Json(json!({ "version": version, "sheets": sheets })))
+}
+
 async fn create_table(rocket: Rocket<Build>) -> fairing::Result {
     let Some(pool) = IronCalcDB::fetch(&rocket) else {
         return Err(rocket);
@@ -428,6 +471,7 @@ pub fn stage(token: String) -> AdHoc {
                     rename_document,
                     delete_document,
                     document_values,
+                    document_snapshot,
                 ],
             )
     })
@@ -613,6 +657,43 @@ mod tests {
         let gone = client.get(path).header(bearer()).dispatch().await;
         assert_eq!(gone.status(), Status::NotFound);
         assert_eq!(save(&client, &doc.id, 1).await.status(), Status::NotFound);
+    }
+
+    #[rocket::async_test]
+    async fn a_snapshot_has_every_filled_cell() {
+        let client = client("snapshot").await;
+        let mut model = IModel::new_empty("book", "en", "UTC", "en").unwrap();
+        model.set_user_input(0, 1, 1, "=1/0".to_string()).unwrap();
+        model.set_user_input(0, 2, 2, "text".to_string()).unwrap();
+        model.set_user_input(0, 3, 1, "=2+3".to_string()).unwrap();
+        model.evaluate();
+        let response = client
+            .post("/api/documents?name=Source")
+            .header(bearer())
+            .body(model.to_bytes())
+            .dispatch()
+            .await;
+        let doc: DocumentInfo = response.into_json().await.unwrap();
+        let response = client
+            .get(format!("/api/documents/{}/snapshot", doc.id))
+            .header(bearer())
+            .dispatch()
+            .await;
+        assert_eq!(response.status(), Status::Ok);
+        let body: Value = response.into_json().await.unwrap();
+        assert_eq!(body["version"], 1);
+        assert_eq!(body["sheets"][0]["name"], "Sheet1");
+        let cells = body["sheets"][0]["cells"].as_array().unwrap();
+        assert_eq!(cells.len(), 3);
+        assert!(cells.contains(&json!([1, 1, { "error": "#DIV/0!" }])));
+        assert!(cells.contains(&json!([2, 2, "text"])));
+        assert!(cells.contains(&json!([3, 1, 5.0])));
+
+        let plain = client
+            .get(format!("/api/documents/{}/snapshot", doc.id))
+            .dispatch()
+            .await;
+        assert_eq!(plain.status(), Status::Unauthorized);
     }
 
     #[rocket::async_test]

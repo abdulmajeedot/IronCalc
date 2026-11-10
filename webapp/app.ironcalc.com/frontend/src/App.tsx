@@ -25,6 +25,10 @@ import {
 } from "./components/documents";
 import { FileBar } from "./components/FileBar";
 import LeftDrawer from "./components/LeftDrawer/LeftDrawer";
+import {
+  type LinkRefresh,
+  refreshLinkedWorkbooks,
+} from "./components/linkedWorkbooks";
 import { NoticeBar } from "./components/NoticeBar";
 import {
   get_documentation_model,
@@ -229,6 +233,17 @@ function App() {
     if (!model || isReadOnly) {
       return;
     }
+    const applyLinkRefresh = (refresh: LinkRefresh) => {
+      if (refresh.changed) {
+        markSelectedDirty();
+        ironCalcRef.current?.workbook?.refresh();
+        saveSelectedModelInStorage(model).catch(reportSaveError);
+      }
+    };
+    // The values of linked workbooks are brought up to date on opening.
+    refreshLinkedWorkbooks(model, false)
+      .then(applyLinkRefresh)
+      .catch(() => {});
     const interval = setInterval(() => {
       sendEdits(model)
         .then((conflict) => {
@@ -237,9 +252,13 @@ function App() {
           }
         })
         .catch(() => {});
+      // A formula just typed may name a workbook not linked yet.
+      refreshLinkedWorkbooks(model, true)
+        .then(applyLinkRefresh)
+        .catch(() => {});
     }, 3000);
     return () => clearInterval(interval);
-  }, [model, isReadOnly]);
+  }, [model, isReadOnly, reportSaveError]);
 
   if (!model) {
     return (

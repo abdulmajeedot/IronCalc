@@ -1,6 +1,7 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
+use ironcalc_base::expressions::utils::number_to_column;
 use ironcalc_base::preserved::is_external_cache_sheet;
-use ironcalc_base::types::Workbook;
+use ironcalc_base::types::{Cell, Workbook, Worksheet};
 
 use super::escape::escape_xml;
 
@@ -11,13 +12,95 @@ const WORKBOOK_TYPE: &str =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml";
 const MACRO_WORKBOOK_TYPE: &str = "application/vnd.ms-excel.sheet.macroEnabled.main+xml";
 
+/// The file parts for a link to a document on the backend: Excel shows the
+/// last values read.
+fn linked_document_parts(workbook: &Workbook, name: &str) -> (String, String) {
+    let prefix = format!("[{name}]");
+    let sheets: Vec<&Worksheet> = workbook
+        .worksheets
+        .iter()
+        .filter(|worksheet| {
+            is_external_cache_sheet(worksheet) && worksheet.name.starts_with(&prefix)
+        })
+        .collect();
+    let sheet_names: String = sheets
+        .iter()
+        .map(|worksheet| {
+            format!(
+                r#"<sheetName val="{}"/>"#,
+                escape_xml(&worksheet.name[prefix.len()..])
+            )
+        })
+        .collect();
+    let mut data = String::new();
+    for (index, worksheet) in sheets.iter().enumerate() {
+        data.push_str(&format!(r#"<sheetData sheetId="{index}">"#));
+        let mut cells: Vec<(i32, i32, _)> = worksheet.sheet_data.cells().collect();
+        cells.sort_by_key(|(row, column, _)| (*row, *column));
+        let mut current_row = None;
+        for (row, column, cell) in cells {
+            let Some(column_name) = number_to_column(column) else {
+                continue;
+            };
+            let (kind, value) = match cell.as_ref() {
+                Cell::NumberCell { v, .. } => ("", v.to_string()),
+                Cell::BooleanCell { v, .. } => (r#" t="b""#, u8::from(*v).to_string()),
+                Cell::ErrorCell { ei, .. } => (r#" t="e""#, ei.to_string()),
+                Cell::SharedString { si, .. } => (
+                    r#" t="str""#,
+                    workbook
+                        .shared_strings
+                        .get(*si as usize)
+                        .cloned()
+                        .unwrap_or_default(),
+                ),
+                _ => continue,
+            };
+            if current_row != Some(row) {
+                if current_row.is_some() {
+                    data.push_str("</row>");
+                }
+                data.push_str(&format!(r#"<row r="{row}">"#));
+                current_row = Some(row);
+            }
+            data.push_str(&format!(
+                r#"<cell r="{column_name}{row}"{kind}><v>{}</v></cell>"#,
+                escape_xml(&value)
+            ));
+        }
+        if current_row.is_some() {
+            data.push_str("</row>");
+        }
+        data.push_str("</sheetData>");
+    }
+    let part = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<externalLink xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><externalBook r:id="rId1"><sheetNames>{sheet_names}</sheetNames><sheetDataSet>{data}</sheetDataSet></externalBook></externalLink>"#
+    );
+    let target = escape_xml(&format!("{name}.xlsx")).to_string();
+    let rels = format!(
+        r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLinkPath" Target="{target}" TargetMode="External"/></Relationships>"#
+    );
+    (part, rels)
+}
+
 /// A copy of a workbook without the sheets that only hold linked workbooks.
 /// Those go in the file as links.
 pub(crate) fn without_cache_sheets(workbook: &Workbook) -> Option<Workbook> {
-    if !workbook.worksheets.iter().any(is_external_cache_sheet) {
+    if !workbook.worksheets.iter().any(is_external_cache_sheet)
+        && workbook.external_links.is_empty()
+    {
         return None;
     }
     let mut copy = workbook.clone();
+    for link in &mut copy.external_links {
+        if link.document_id.is_some() {
+            let (part_xml, rels_xml) = linked_document_parts(workbook, &link.display_name);
+            link.part_xml = part_xml;
+            link.rels_xml = Some(rels_xml);
+        }
+    }
     copy.worksheets
         .retain(|worksheet| !is_external_cache_sheet(worksheet));
     Some(copy)

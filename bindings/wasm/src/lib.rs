@@ -1980,6 +1980,26 @@ impl Model {
             .map_err(to_js_error)
     }
 
+    /// The workbooks formulas name that can be read from the backend.
+    #[wasm_bindgen(js_name = "getExternalBooks", unchecked_return_type = "ExternalBook[]")]
+    pub fn get_external_books(&self) -> Result<JsValue, JsError> {
+        to_js(&self.model.external_books())
+    }
+
+    /// Replaces what is known of a linked document and recalculates.
+    #[wasm_bindgen(js_name = "setLinkedWorkbook")]
+    pub fn set_linked_workbook(
+        &mut self,
+        name: &str,
+        document_id: &str,
+        version: f64,
+        #[wasm_bindgen(unchecked_param_type = "LinkedSheet[]")] sheets: JsValue,
+    ) -> Result<(), JsError> {
+        self.model
+            .set_linked_workbook(name, document_id, version as i64, from_js(sheets)?)
+            .map_err(to_js_error)
+    }
+
     /// The formula for what was typed as a "cell value" rule's value.
     #[wasm_bindgen(js_name = "cfValueToFormula")]
     pub fn cf_value_to_formula(&self, value: &str) -> String {

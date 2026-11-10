@@ -191,6 +191,7 @@ pub(super) fn load_external_links<R: Read + Seek>(
             display_name,
             part_xml,
             rels_xml,
+            ..Default::default()
         });
     }
     Ok(books)

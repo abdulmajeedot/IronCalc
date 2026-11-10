@@ -213,6 +213,27 @@ export async function deleteDocument(id: string): Promise<void> {
   }
 }
 
+export interface DocumentSnapshot {
+  version: number;
+  sheets: { name: string; cells: unknown[] }[];
+}
+
+export async function readDocumentSnapshot(
+  id: string,
+): Promise<DocumentSnapshot> {
+  const response = await request(`/${encodeURIComponent(id)}/snapshot`);
+  if (!response.ok) {
+    throw failed(response);
+  }
+  return (await response.json()) as DocumentSnapshot;
+}
+
+// Which document the open workbook is, if it is on the backend.
+export function getSelectedDocumentId(): string | null {
+  const uuid = getSelectedUuid();
+  return uuid ? (readLinks()[uuid]?.documentId ?? null) : null;
+}
+
 export function isSelectedOnBackend(): boolean {
   const uuid = getSelectedUuid();
   return uuid !== null && readLinks()[uuid] !== undefined;

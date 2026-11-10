@@ -545,6 +545,24 @@ impl<'a> UserModel<'a> {
         self.model.get_localized_cell_content(sheet, row, column)
     }
 
+    /// The workbooks formulas name that can be read from the backend.
+    pub fn external_books(&self) -> Vec<crate::preserved::ExternalBook> {
+        self.model.external_books()
+    }
+
+    /// Replaces what is known of a linked document and recalculates. It
+    /// reflects another file, so it can't be undone.
+    pub fn set_linked_workbook(
+        &mut self,
+        name: &str,
+        document_id: &str,
+        version: i64,
+        sheets: Vec<crate::preserved::LinkedSheet>,
+    ) -> Result<(), String> {
+        self.model
+            .set_linked_workbook(name, document_id, version, sheets)
+    }
+
     /// Returns completion information for a formula being edited in a cell.
     ///
     /// `formula` is the raw cell input (it may start with `=`) and `cursor` is a

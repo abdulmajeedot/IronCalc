@@ -927,6 +927,19 @@ export interface ValidationSettings {
 
 export type InsertCopiedMode = "down" | "right" | "rows" | "columns";
 
+export interface ExternalBook {
+  name: string;
+  document_id?: string | null;
+  version?: number | null;
+}
+
+export type LinkedValue = number | boolean | string | { error: string };
+
+export interface LinkedSheet {
+  name: string;
+  cells: [number, number, LinkedValue][];
+}
+
 export interface ProtectionPermissions {
   select_locked_cells: boolean;
   select_unlocked_cells: boolean;
